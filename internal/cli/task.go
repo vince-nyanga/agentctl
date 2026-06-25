@@ -178,8 +178,9 @@ func startAgent(state core.State, task core.Task, role, name, repo, workdir, pro
 	}
 	tmuxName := fmt.Sprintf("agentctl-%s-%s", task.ID, name)
 	command := strings.TrimSpace(strings.Join(append([]string{harness.Command}, harness.Args...), " "))
-	if err := core.StartTmuxAgent(tmuxName, workdir, command, string(prompt)); err != nil {
+	logPath := filepath.Join(task.Workspace, "logs", name+".log")
+	if err := core.StartTmuxAgent(tmuxName, workdir, command, string(prompt), logPath); err != nil {
 		return core.Agent{}, err
 	}
-	return core.Agent{Name: name, Role: role, Harness: harnessName, Repo: repo, State: "running", TmuxName: tmuxName, Workdir: workdir, LogPath: filepath.Join(task.Workspace, "logs", name+".log"), CreatedAt: time.Now()}, nil
+	return core.Agent{Name: name, Role: role, Harness: harnessName, Repo: repo, State: "running", TmuxName: tmuxName, Workdir: workdir, LogPath: logPath, CreatedAt: time.Now()}, nil
 }

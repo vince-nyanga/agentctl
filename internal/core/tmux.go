@@ -2,7 +2,9 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -11,7 +13,7 @@ func HasCommand(name string) bool {
 	return err == nil
 }
 
-func StartTmuxAgent(sessionName, workdir, command, prompt string) error {
+func StartTmuxAgent(sessionName, workdir, command, prompt, logPath string) error {
 	if !HasCommand("tmux") {
 		return fmt.Errorf("tmux is required but was not found")
 	}
@@ -24,10 +26,23 @@ func StartTmuxAgent(sessionName, workdir, command, prompt string) error {
 	if err := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", workdir, command).Run(); err != nil {
 		return err
 	}
+	if logPath != "" {
+		if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+			return err
+		}
+		pipeCommand := "cat >> " + shellQuote(logPath)
+		if err := exec.Command("tmux", "pipe-pane", "-o", "-t", sessionName, pipeCommand).Run(); err != nil {
+			return err
+		}
+	}
 	if strings.TrimSpace(prompt) != "" {
 		return SendTmux(sessionName, prompt)
 	}
 	return nil
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func TmuxSessionExists(target string) bool {
