@@ -134,6 +134,12 @@ Inspect one task without opening the TUI:
 ./agentctl inspect <task-id>
 ```
 
+Read recent output for a tracked agent:
+
+```sh
+./agentctl logs <task-id> --agent manager-agent
+```
+
 Create a PR for a task repo:
 
 ```sh
