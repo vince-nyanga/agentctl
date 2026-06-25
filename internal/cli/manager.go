@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -24,50 +25,62 @@ func newManagerTickCommand(ctx *appContext) *cobra.Command {
 		Short: "Build a manager supervision prompt for a task",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			state, err := ctx.store.Load()
-			if err != nil {
-				return err
-			}
-			task, ok := state.Tasks[args[0]]
-			if !ok {
-				return fmt.Errorf("unknown task %q", args[0])
-			}
-			events, err := ctx.store.ListEvents(task.ID, eventLimit)
-			if err != nil {
-				return err
-			}
-			outputs := collectAgentOutputs(task, outputLines)
-			prompt := core.BuildManagerTickPrompt(task, events, outputs)
-			promptPath := filepath.Join(task.Workspace, "manager-tick.md")
-			if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
-				return err
-			}
-
-			if !send {
-				fmt.Fprint(cmd.OutOrStdout(), prompt)
-				return nil
-			}
-			manager, err := findAgentByRole(task, "manager")
-			if err != nil {
-				return err
-			}
-			if !core.TmuxSessionExists(manager.TmuxName) {
-				return fmt.Errorf("manager session %s is not running", manager.TmuxName)
-			}
-			if err := core.SendTmux(manager.TmuxName, prompt); err != nil {
-				return err
-			}
-			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, AgentName: manager.Name, Type: "manager.tick_sent", Message: "sent supervision prompt to manager"}); err != nil {
-				return err
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "sent manager tick to %s\n", manager.Name)
-			return nil
+			return runManagerTick(ctx, args[0], send, eventLimit, outputLines, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&send, "send", false, "send prompt to the manager tmux session")
 	cmd.Flags().IntVar(&eventLimit, "events", 10, "number of recent events to include")
 	cmd.Flags().IntVar(&outputLines, "lines", 80, "number of tmux lines to include per live agent")
 	return cmd
+}
+
+func runManagerTick(ctx *appContext, taskID string, send bool, eventLimit, outputLines int, out io.Writer) error {
+	state, err := ctx.store.Load()
+	if err != nil {
+		return err
+	}
+	task, ok := state.Tasks[taskID]
+	if !ok {
+		return fmt.Errorf("unknown task %q", taskID)
+	}
+	events, err := ctx.store.ListEvents(task.ID, eventLimit)
+	if err != nil {
+		return err
+	}
+	outputs := collectAgentOutputs(task, outputLines)
+	prompt := core.BuildManagerTickPrompt(task, events, outputs)
+	promptPath := filepath.Join(task.Workspace, "manager-tick.md")
+	if err := os.WriteFile(promptPath, []byte(prompt), 0o644); err != nil {
+		return err
+	}
+
+	if !send {
+		fmt.Fprint(out, prompt)
+		return nil
+	}
+	manager, err := findAgentByRole(task, "manager")
+	if err != nil {
+		return err
+	}
+	if !core.TmuxSessionExists(manager.TmuxName) {
+		return fmt.Errorf("manager session %s is not running", manager.TmuxName)
+	}
+	if err := core.SendTmux(manager.TmuxName, prompt); err != nil {
+		return err
+	}
+	if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, AgentName: manager.Name, Type: "manager.tick_sent", Message: "sent supervision prompt to manager"}); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "sent manager tick to %s\n", manager.Name)
+	return nil
+}
+
+func taskHasRunningManager(task core.Task) bool {
+	manager, err := findAgentByRole(task, "manager")
+	if err != nil {
+		return false
+	}
+	return core.TmuxSessionExists(manager.TmuxName)
 }
 
 func collectAgentOutputs(task core.Task, lines int) []core.AgentOutput {

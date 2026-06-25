@@ -95,6 +95,7 @@ Run the foreground supervision loop:
 ./agentctl daemon
 ./agentctl daemon --once
 ./agentctl afk
+./agentctl afk --manager-tick
 ```
 
 Build or send an AI manager supervision prompt for a task:
