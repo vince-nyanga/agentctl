@@ -36,6 +36,13 @@ Daemonized supervision, richer approvals, and remote monitoring are specified in
 ## Build
 
 ```sh
+make check
+```
+
+Equivalent manual commands:
+
+```sh
+gofmt -w .
 go test ./...
 go build -o agentctl .
 ```
