@@ -56,3 +56,12 @@ type State struct {
 	Repos  map[string]Repo `json:"repos"`
 	Tasks  map[string]Task `json:"tasks"`
 }
+
+type Event struct {
+	ID        int64     `json:"id"`
+	TaskID    string    `json:"task_id,omitempty"`
+	AgentName string    `json:"agent_name,omitempty"`
+	Type      string    `json:"type"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"created_at"`
+}

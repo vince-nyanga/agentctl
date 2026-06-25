@@ -31,6 +31,8 @@ func Execute() error {
 	rootCmd.AddCommand(newPlanCommand(ctx))
 	rootCmd.AddCommand(newDispatchCommand(ctx))
 	rootCmd.AddCommand(newStatusCommand(ctx))
+	rootCmd.AddCommand(newEventsCommand(ctx))
+	rootCmd.AddCommand(newSuperviseCommand(ctx))
 	rootCmd.AddCommand(newDashboardCommand(ctx))
 	rootCmd.AddCommand(newOpenCommand(ctx))
 	rootCmd.AddCommand(newPRCommand(ctx))

@@ -64,6 +64,9 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 			if err := ctx.store.Save(state); err != nil {
 				return err
 			}
+			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.created", Message: "created planning workspace"}); err != nil {
+				return err
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "created task %s at %s\n", task.ID, task.Workspace)
 			return nil
 		},
@@ -100,6 +103,9 @@ func newDispatchCommand(ctx *appContext) *cobra.Command {
 			task.UpdatedAt = time.Now()
 			state.Tasks[task.ID] = task
 			if err := ctx.store.Save(state); err != nil {
+				return err
+			}
+			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.dispatched", Message: fmt.Sprintf("dispatched %d workers", len(task.Repos))}); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "dispatched %d workers for %s\n", len(task.Repos), task.ID)

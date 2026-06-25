@@ -30,6 +30,13 @@ func StartTmuxAgent(sessionName, workdir, command, prompt string) error {
 	return nil
 }
 
+func TmuxSessionExists(target string) bool {
+	if target == "" || !HasCommand("tmux") {
+		return false
+	}
+	return exec.Command("tmux", "has-session", "-t", target).Run() == nil
+}
+
 func SendTmux(target, message string) error {
 	if err := exec.Command("tmux", "send-keys", "-t", target, message).Run(); err != nil {
 		return err

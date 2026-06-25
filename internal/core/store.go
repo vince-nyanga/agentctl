@@ -213,6 +213,14 @@ func migrate(ctx context.Context, db *sql.DB) error {
             PRIMARY KEY (task_id, name),
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
         )`,
+		`CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL DEFAULT '',
+            agent_name TEXT NOT NULL DEFAULT '',
+            type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )`,
 	}
 	for _, statement := range statements {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
@@ -390,6 +398,62 @@ func parseTime(value string) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+func (s *Store) AddEvent(event Event) error {
+	if err := s.Init(); err != nil {
+		return err
+	}
+	db, err := s.open()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now()
+	}
+	_, err = db.ExecContext(context.Background(), `INSERT INTO events(task_id, agent_name, type, message, created_at) VALUES(?, ?, ?, ?, ?)`, event.TaskID, event.AgentName, event.Type, event.Message, formatTime(event.CreatedAt))
+	return err
+}
+
+func (s *Store) ListEvents(taskID string, limit int) ([]Event, error) {
+	if err := s.Init(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	query := `SELECT id, task_id, agent_name, type, message, created_at FROM events`
+	args := []any{}
+	if taskID != "" {
+		query += ` WHERE task_id = ?`
+		args = append(args, taskID)
+	}
+	query += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := db.QueryContext(context.Background(), query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []Event
+	for rows.Next() {
+		var event Event
+		var createdAt string
+		if err := rows.Scan(&event.ID, &event.TaskID, &event.AgentName, &event.Type, &event.Message, &createdAt); err != nil {
+			return nil, err
+		}
+		event.CreatedAt = parseTime(createdAt)
+		events = append(events, event)
+	}
+	return events, rows.Err()
 }
 
 func dumpStateForDebug(state State) string {

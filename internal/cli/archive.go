@@ -59,6 +59,9 @@ func newArchiveCommand(ctx *appContext) *cobra.Command {
 			if err := ctx.store.Save(state); err != nil {
 				return err
 			}
+			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.archived", Message: "archived task and cleaned up owned resources"}); err != nil {
+				return err
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "archived task %s\n", task.ID)
 			return nil
 		},

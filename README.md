@@ -18,6 +18,7 @@ This first build includes:
 - Configurable harness roles from day one.
 - OpenCode as the default manager/worker/reviewer harness.
 - tmux-backed manager and worker sessions.
+- Basic event log and `supervise` reconciliation command.
 - Bubble Tea TUI dashboard.
 - GitHub PR creation command using `gh`.
 - Task archival cleanup for tmux sessions and git worktrees.
@@ -102,6 +103,19 @@ Attach to a running agent:
 ./agentctl open <task-id> --agent manager-agent
 ```
 
+Reconcile tracked tmux sessions and update agent state:
+
+```sh
+./agentctl supervise <task-id>
+```
+
+Inspect recent events:
+
+```sh
+./agentctl events
+./agentctl events --task <task-id> --limit 50
+```
+
 Create a PR for a task repo:
 
 ```sh
@@ -140,3 +154,114 @@ Default root:
 ```text
 ~/.agentctl
 ```
+
+## Architecture Decisions
+
+`agentctl` is intentionally local-first. The first job is to make local agentic development reliable before adding remote dashboards, notification channels, or cloud coordination.
+
+### Why Go
+
+Go was chosen over Rust, Python, Node.js, and a desktop-first stack for pragmatic reasons:
+
+- Single static-ish binary distribution is straightforward.
+- Process orchestration is simple and reliable.
+- Filesystem, git, tmux, and long-running daemon work are natural fits.
+- The standard library is strong enough for most of the core system.
+- The Go codebase should be easier for coding agents to extend safely than an equivalent Rust codebase at this stage.
+- Performance is more than enough because this is orchestration-heavy, not CPU-bound.
+- The Charmbracelet ecosystem gives Go a strong path for polished terminal UIs.
+
+Rust remains attractive for maximum correctness and systems-level control, but the early product risk is workflow design, not memory safety or raw performance. Go should let the project reach useful daily-driver status faster.
+
+### Why TUI First
+
+The primary workflow is terminal-native. A TUI gives immediate visibility without forcing a browser app too early.
+
+The dashboard is the cockpit:
+
+- Tasks.
+- Agents.
+- Repos.
+- Blockers.
+- Approvals.
+- Manager feed.
+- Logs and diffs.
+
+A web UI is planned later, using the same daemon/state model, once the local core is stable.
+
+### Why SQLite
+
+SQLite is used for durable local state because the tool needs structured queries, recovery after restarts, and a reliable event log without requiring a server.
+
+Markdown files still remain important. Human-readable artifacts such as `plan.md`, `decisions.md`, `risk-review.md`, and repo briefs live in the task workspace so both humans and agents can inspect them directly.
+
+### Why tmux First
+
+tmux is the lowest common denominator for terminal coding agents. Most agent harnesses can run inside a tmux session even if they do not expose an SDK or structured event stream.
+
+The initial harness capability level is:
+
+- Start a terminal session.
+- Send a prompt.
+- Capture output.
+- Attach manually.
+- Stop the session.
+
+Richer adapters can be added later for harnesses that expose JSONL logs, SDKs, HTTP APIs, or MCP interfaces.
+
+### Why Harness-Agnostic Roles
+
+The core should not know about Claude Code, OpenCode, Pi, or Codex directly. It knows about roles:
+
+- `manager`
+- `worker`
+- `reviewer`
+
+Each role maps to a configurable harness. That allows workflows like:
+
+```text
+manager: Claude Code
+backend worker: OpenCode
+frontend worker: Pi
+reviewer: Codex
+```
+
+OpenCode is the default first harness because it is the immediate target, but the architecture must remain agent-agnostic.
+
+### Why Task Workspaces
+
+The unit of work is a task, not a repo. A single task may require backend, frontend, mobile, infra, and documentation changes.
+
+Task workspaces give each task isolated git worktrees created from existing local clones:
+
+```text
+~/.agentctl/tasks/<task-id>/
+├── plan.md
+├── briefs/
+├── worktrees/
+│   ├── backend/
+│   └── frontend/
+└── logs/
+```
+
+This keeps the user's normal checkouts clean while letting agents coordinate multi-repo work.
+
+### Why Cleanup Is First-Class
+
+Agentic workflows create many branches, worktrees, sessions, and logs. If cleanup is not built in, the tool becomes another source of clutter.
+
+`agentctl archive <task-id>` stops tracked tmux sessions, removes agent-owned worktrees, prunes worktree metadata, and marks the task archived while preserving planning/report artifacts for later inspection.
+
+### Remote Monitoring Later
+
+Remote monitoring is planned, but not in the first core. It should be built after the local state model and supervision loop are trustworthy.
+
+The planned progression is:
+
+1. Local TUI.
+2. Local web dashboard bound to `127.0.0.1`.
+3. Authenticated LAN mode.
+4. Secure tunnel or notification channel.
+5. Remote read-only and approval-safe modes.
+
+Remote access should not expose raw shell control by default.
