@@ -89,6 +89,13 @@ Check local dependencies and harness availability:
 ./agentctl doctor
 ```
 
+Run the foreground supervision loop:
+
+```sh
+./agentctl daemon
+./agentctl daemon --once
+```
+
 Configure harness roles:
 
 ```sh

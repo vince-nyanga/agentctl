@@ -28,6 +28,7 @@ func Execute() error {
 	rootCmd.AddCommand(newInitCommand(ctx))
 	rootCmd.AddCommand(newVersionCommand())
 	rootCmd.AddCommand(newDoctorCommand(ctx))
+	rootCmd.AddCommand(newDaemonCommand(ctx))
 	rootCmd.AddCommand(newRepoCommand(ctx))
 	rootCmd.AddCommand(newConfigCommand(ctx))
 	rootCmd.AddCommand(newPlanCommand(ctx))
