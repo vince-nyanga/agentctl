@@ -94,6 +94,7 @@ Run the foreground supervision loop:
 ```sh
 ./agentctl daemon
 ./agentctl daemon --once
+./agentctl afk
 ```
 
 Configure harness roles:
