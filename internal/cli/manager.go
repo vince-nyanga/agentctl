@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vince-nyanga/agentctl/internal/core"
@@ -13,6 +14,7 @@ import (
 func newManagerCommand(ctx *appContext) *cobra.Command {
 	cmd := &cobra.Command{Use: "manager", Short: "Manager-agent supervision helpers"}
 	cmd.AddCommand(newManagerTickCommand(ctx))
+	cmd.AddCommand(newManagerApplyCommand(ctx))
 	return cmd
 }
 
@@ -32,6 +34,91 @@ func newManagerTickCommand(ctx *appContext) *cobra.Command {
 	cmd.Flags().IntVar(&eventLimit, "events", 10, "number of recent events to include")
 	cmd.Flags().IntVar(&outputLines, "lines", 80, "number of tmux lines to include per live agent")
 	return cmd
+}
+
+func newManagerApplyCommand(ctx *appContext) *cobra.Command {
+	var file string
+	cmd := &cobra.Command{
+		Use:   "apply <task-id>",
+		Short: "Apply a structured manager action block",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			state, err := ctx.store.Load()
+			if err != nil {
+				return err
+			}
+			task, ok := state.Tasks[args[0]]
+			if !ok {
+				return fmt.Errorf("unknown task %q", args[0])
+			}
+			if file == "" {
+				file = filepath.Join(task.Workspace, "manager-response.md")
+			}
+			data, err := os.ReadFile(file)
+			if err != nil {
+				return err
+			}
+			actions, err := core.ParseManagerActions(string(data))
+			if err != nil {
+				return err
+			}
+			for _, action := range actions {
+				if err := applyManagerAction(ctx, &state, task, action); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "applied %d manager actions\n", len(actions))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&file, "file", "", "manager response file; defaults to task manager-response.md")
+	return cmd
+}
+
+func applyManagerAction(ctx *appContext, state *core.State, task core.Task, action core.ManagerAction) error {
+	switch action.Type {
+	case "approval":
+		approvalType := action.ApprovalType
+		if approvalType == "" {
+			approvalType = "other"
+		}
+		if _, err := ctx.store.CreateApproval(core.Approval{TaskID: task.ID, AgentName: "manager-agent", Type: approvalType, Title: action.Title, Description: action.Description, Risk: action.Risk, RecommendedAction: action.RecommendedAction}); err != nil {
+			return err
+		}
+		return ctx.store.AddEvent(core.Event{TaskID: task.ID, AgentName: "manager-agent", Type: "approval.requested", Message: action.Title})
+	case "nudge":
+		agent, err := findAgentByName(task, action.AgentName)
+		if err != nil {
+			return err
+		}
+		if !core.TmuxSessionExists(agent.TmuxName) {
+			return fmt.Errorf("agent session %s is not running", agent.TmuxName)
+		}
+		if err := core.SendTmux(agent.TmuxName, action.Message); err != nil {
+			return err
+		}
+		return ctx.store.AddEvent(core.Event{TaskID: task.ID, AgentName: agent.Name, Type: "agent.nudged", Message: action.Message})
+	case "done":
+		task.State = "done"
+		task.ManagerNote = action.Message
+		task.UpdatedAt = time.Now()
+		state.Tasks[task.ID] = task
+		if err := ctx.store.Save(*state); err != nil {
+			return err
+		}
+		return ctx.store.AddEvent(core.Event{TaskID: task.ID, AgentName: "manager-agent", Type: "task.done", Message: action.Message})
+	default:
+		return fmt.Errorf("unsupported manager action %q", action.Type)
+	}
+}
+
+func findAgentByName(task core.Task, name string) (core.Agent, error) {
+	for _, agent := range task.Agents {
+		if agent.Name == name {
+			return agent, nil
+		}
+	}
+	return core.Agent{}, fmt.Errorf("task %s has no agent %q", task.ID, name)
 }
 
 func runManagerTick(ctx *appContext, taskID string, send bool, eventLimit, outputLines int, out io.Writer) error {

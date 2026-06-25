@@ -106,6 +106,7 @@ Build or send an AI manager supervision prompt for a task:
 ```sh
 ./agentctl manager tick <task-id>
 ./agentctl manager tick <task-id> --send
+./agentctl manager apply <task-id> --file manager-response.md
 ```
 
 Configure harness roles:

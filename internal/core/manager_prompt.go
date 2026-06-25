@@ -65,6 +65,32 @@ Your job:
 4. If implementation appears complete, say what review/test/PR step should happen next.
 5. Do not ask the user for routine implementation details you can resolve from the plan, briefs, code, logs, or tests.
 6. Keep the response operational: status, actions taken or recommended, blockers, next step.
+
+If you want agentctl to take action, include exactly one machine-readable block at the end:
+
+AGENTCTL_ACTIONS:
+[
+  {
+    "type": "approval",
+    "approval_type": "api_contract|migration|command|pr|merge|deploy|other",
+    "title": "short title",
+    "description": "decision needed",
+    "risk": "low|medium|high",
+    "recommended_action": "approve/deny/modify with rationale"
+  },
+  {
+    "type": "nudge",
+    "agent_name": "worker-agent-name",
+    "message": "exact instruction to send"
+  },
+  {
+    "type": "done",
+    "message": "why this task is ready/done"
+  }
+]
+END_AGENTCTL_ACTIONS
+
+Only include actions you are confident agentctl should execute or record.
 `)
 
 	return b.String()
