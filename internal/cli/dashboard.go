@@ -28,7 +28,11 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 					eventsByTask[taskID] = events
 				}
 			}
-			model := newDashboardModel(state, eventsByTask)
+			allEvents, err := ctx.store.ListEvents("", 30)
+			if err != nil {
+				allEvents = nil
+			}
+			model := newDashboardModel(state, eventsByTask, allEvents)
 			_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
 			return err
 		},
@@ -36,15 +40,17 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 }
 
 type dashboardModel struct {
-	state    core.State
-	tasks    []core.Task
-	selected int
-	width    int
-	height   int
-	events   map[string][]core.Event
+	state     core.State
+	tasks     []core.Task
+	selected  int
+	width     int
+	height    int
+	events    map[string][]core.Event
+	allEvents []core.Event
+	tab       int
 }
 
-func newDashboardModel(state core.State, events map[string][]core.Event) dashboardModel {
+func newDashboardModel(state core.State, events map[string][]core.Event, allEvents []core.Event) dashboardModel {
 	tasks := make([]core.Task, 0, len(state.Tasks))
 	for _, task := range state.Tasks {
 		tasks = append(tasks, task)
@@ -53,7 +59,7 @@ func newDashboardModel(state core.State, events map[string][]core.Event) dashboa
 	if events == nil {
 		events = map[string][]core.Event{}
 	}
-	return dashboardModel{state: state, tasks: tasks, events: events}
+	return dashboardModel{state: state, tasks: tasks, events: events, allEvents: allEvents}
 }
 
 func (m dashboardModel) Init() tea.Cmd { return nil }
@@ -75,6 +81,13 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selected > 0 {
 				m.selected--
 			}
+		case key.Matches(msg, key.NewBinding(key.WithKeys("l", "right", "tab"))):
+			m.tab = (m.tab + 1) % len(dashboardTabs)
+		case key.Matches(msg, key.NewBinding(key.WithKeys("h", "left", "shift+tab"))):
+			m.tab--
+			if m.tab < 0 {
+				m.tab = len(dashboardTabs) - 1
+			}
 		}
 	}
 	return m, nil
@@ -85,23 +98,96 @@ func (m dashboardModel) View() string {
 		m.width = 100
 	}
 	header := titleStyle.Width(m.width).Render("Agent Mission Control")
-	footer := footerStyle.Width(m.width).Render("j/k move · q quit · use `agentctl open <task> --agent <name>` to attach")
+	tabs := m.renderTabs(m.width)
+	footer := footerStyle.Width(m.width).Render("h/l switch tabs | j/k move tasks | q quit | open: agentctl open <task> --agent <name>")
 	if len(m.tasks) == 0 {
-		return lipgloss.JoinVertical(lipgloss.Left, header, emptyStyle.Render("No tasks yet. Start with: agentctl plan \"Your goal\" --repo <name>"), footer)
+		return lipgloss.JoinVertical(lipgloss.Left, header, tabs, emptyStyle.Render("No tasks yet. Start with: agentctl plan \"Your goal\" --repo <name>"), footer)
 	}
 
-	leftWidth := 36
-	if m.width < 90 {
-		leftWidth = 30
+	body := m.renderActiveTab(m.width)
+	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer)
+}
+
+var dashboardTabs = []string{"Overview", "Tasks", "Approvals", "Blocked", "Events", "Detail"}
+
+func (m dashboardModel) renderTabs(width int) string {
+	parts := make([]string, 0, len(dashboardTabs))
+	for i, tab := range dashboardTabs {
+		style := inactiveTabStyle
+		if i == m.tab {
+			style = activeTabStyle
+		}
+		parts = append(parts, style.Render(tab))
 	}
-	rightWidth := m.width - leftWidth - 4
-	if rightWidth < 40 {
-		rightWidth = 40
+	return tabsStyle.Width(width).Render(strings.Join(parts, " "))
+}
+
+func (m dashboardModel) renderActiveTab(width int) string {
+	switch dashboardTabs[m.tab] {
+	case "Overview":
+		return m.renderOverview(width)
+	case "Tasks":
+		return m.renderTaskBoard(width)
+	case "Approvals":
+		return m.renderApprovals(width)
+	case "Blocked":
+		return m.renderBlocked(width)
+	case "Events":
+		return m.renderEvents(width)
+	case "Detail":
+		return m.renderTaskBoard(width)
+	default:
+		return m.renderOverview(width)
+	}
+}
+
+func (m dashboardModel) renderOverview(width int) string {
+	total, running, planning, done, archived := 0, 0, 0, 0, 0
+	agents, stopped := 0, 0
+	for _, task := range m.tasks {
+		total++
+		switch task.State {
+		case "running":
+			running++
+		case "planning":
+			planning++
+		case "done":
+			done++
+		case "archived":
+			archived++
+		}
+		for _, agent := range task.Agents {
+			agents++
+			if agent.State != "running" {
+				stopped++
+			}
+		}
+	}
+	metrics := []string{
+		fmt.Sprintf("Tasks:          %d", total),
+		fmt.Sprintf("Running:        %d", running),
+		fmt.Sprintf("Planning:       %d", planning),
+		fmt.Sprintf("Done:           %d", done),
+		fmt.Sprintf("Archived:       %d", archived),
+		fmt.Sprintf("Agents:         %d", agents),
+		fmt.Sprintf("Needs attention:%d", len(m.attentionTasks())),
+		fmt.Sprintf("Stopped agents: %d", stopped),
+	}
+	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Overview") + "\n\n" + strings.Join(metrics, "\n"))
+}
+
+func (m dashboardModel) renderTaskBoard(width int) string {
+	leftWidth := 40
+	if width < 100 {
+		leftWidth = 34
+	}
+	rightWidth := width - leftWidth - 4
+	if rightWidth < 45 {
+		rightWidth = 45
 	}
 	left := m.renderTaskList(leftWidth)
 	right := m.renderTaskDetail(rightWidth)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
 func (m dashboardModel) renderTaskList(width int) string {
@@ -111,7 +197,11 @@ func (m dashboardModel) renderTaskList(width int) string {
 		if i == m.selected {
 			style = selectedTaskStyle
 		}
-		line := fmt.Sprintf("%s\n%s · %d repos · %d agents", task.ID, task.State, len(task.Repos), len(task.Agents))
+		reason := attentionReason(task)
+		if reason == "" {
+			reason = "ok"
+		}
+		line := fmt.Sprintf("%s\n%s | %d repos | %d agents\n%s", task.ID, task.State, len(task.Repos), len(task.Agents), reason)
 		rows = append(rows, style.Width(width).Render(line))
 	}
 	return panelStyle.Width(width).Render(strings.Join(rows, "\n"))
@@ -134,7 +224,11 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 	b.WriteString(sectionStyle.Render("Repos"))
 	b.WriteString("\n")
 	for _, repo := range task.Repos {
-		b.WriteString(fmt.Sprintf("• %s  %s\n  branch: %s\n", repo.Name, repo.WorktreePath, repo.Branch))
+		owned := "owned"
+		if !repo.Owned {
+			owned = "attached"
+		}
+		b.WriteString(fmt.Sprintf("- %s  %s\n  branch: %s | %s\n", repo.Name, repo.WorktreePath, repo.Branch, owned))
 	}
 	b.WriteString("\n")
 	b.WriteString(sectionStyle.Render("Agents"))
@@ -143,7 +237,7 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 		b.WriteString("No agents started yet.\n")
 	} else {
 		for _, agent := range task.Agents {
-			b.WriteString(fmt.Sprintf("• %s [%s/%s] %s\n  tmux: %s\n", agent.Name, agent.Role, agent.Harness, agent.State, agent.TmuxName))
+			b.WriteString(fmt.Sprintf("- %s [%s/%s] %s\n  tmux: %s\n", agent.Name, agent.Role, agent.Harness, agent.State, agent.TmuxName))
 		}
 	}
 	b.WriteString("\n")
@@ -158,15 +252,70 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 			if actor == "" {
 				actor = "system"
 			}
-			b.WriteString(fmt.Sprintf("• %s [%s] %s: %s\n", event.CreatedAt.Format("15:04:05"), actor, event.Type, event.Message))
+			b.WriteString(fmt.Sprintf("- %s [%s] %s: %s\n", event.CreatedAt.Format("15:04:05"), actor, event.Type, event.Message))
 		}
 	}
 	return panelStyle.Width(width).Render(b.String())
 }
 
+func (m dashboardModel) renderApprovals(width int) string {
+	var rows []string
+	for _, task := range m.tasks {
+		if task.State == "planning" {
+			rows = append(rows, fmt.Sprintf("- %s | plan approval | %s", task.ID, task.Goal))
+		}
+	}
+	if len(rows) == 0 {
+		rows = append(rows, "No pending approvals.")
+	}
+	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Approvals") + "\n\n" + strings.Join(rows, "\n"))
+}
+
+func (m dashboardModel) renderBlocked(width int) string {
+	var rows []string
+	for _, task := range m.attentionTasks() {
+		rows = append(rows, fmt.Sprintf("- %s | %s | %s | %s", task.ID, task.State, attentionReason(task), task.Goal))
+	}
+	if len(rows) == 0 {
+		rows = append(rows, "No tasks need attention.")
+	}
+	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Blocked / Needs Attention") + "\n\n" + strings.Join(rows, "\n"))
+}
+
+func (m dashboardModel) renderEvents(width int) string {
+	var rows []string
+	for _, event := range m.allEvents {
+		actor := event.AgentName
+		if actor == "" {
+			actor = "system"
+		}
+		rows = append(rows, fmt.Sprintf("- %s | %s | %s | %s | %s", event.CreatedAt.Format("15:04:05"), event.TaskID, actor, event.Type, event.Message))
+	}
+	if len(rows) == 0 {
+		rows = append(rows, "No events recorded yet.")
+	}
+	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Recent Events") + "\n\n" + strings.Join(rows, "\n"))
+}
+
+func (m dashboardModel) attentionTasks() []core.Task {
+	var tasks []core.Task
+	for _, task := range m.tasks {
+		if task.State == "archived" || task.State == "done" {
+			continue
+		}
+		if attentionReason(task) != "" {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
 var (
 	titleStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("62")).Padding(0, 1)
 	footerStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Padding(1, 0, 0, 0)
+	tabsStyle         = lipgloss.NewStyle().Padding(1, 0, 0, 0)
+	activeTabStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("62")).Padding(0, 1)
+	inactiveTabStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Padding(0, 1)
 	panelStyle        = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Padding(1, 2).MarginRight(1)
 	sectionStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("81"))
 	labelStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229"))
