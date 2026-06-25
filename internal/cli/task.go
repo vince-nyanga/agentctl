@@ -67,6 +67,9 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.created", Message: "created planning workspace"}); err != nil {
 				return err
 			}
+			if _, err := ctx.store.CreateApproval(core.Approval{TaskID: task.ID, Type: "plan", Title: "Approve task plan", Description: task.Goal, Risk: "medium", RecommendedAction: "review plan and approve when ready"}); err != nil {
+				return err
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "created task %s at %s\n", task.ID, task.Workspace)
 			return nil
 		},
@@ -145,6 +148,17 @@ func newApprovePlanCommand(ctx *appContext) *cobra.Command {
 			}
 			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "plan.approved", Message: "plan approved for worker dispatch"}); err != nil {
 				return err
+			}
+			approvals, err := ctx.store.ListApprovals(task.ID, "pending")
+			if err != nil {
+				return err
+			}
+			for _, approval := range approvals {
+				if approval.Type == "plan" {
+					if _, err := ctx.store.ResolveApproval(approval.ID, "approved"); err != nil {
+						return err
+					}
+				}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "approved plan for %s\n", task.ID)
 			return nil

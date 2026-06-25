@@ -66,3 +66,18 @@ type Event struct {
 	Message   string    `json:"message"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type Approval struct {
+	ID                int64     `json:"id"`
+	TaskID            string    `json:"task_id"`
+	AgentName         string    `json:"agent_name,omitempty"`
+	Type              string    `json:"type"`
+	Title             string    `json:"title"`
+	Description       string    `json:"description"`
+	Risk              string    `json:"risk"`
+	RecommendedAction string    `json:"recommended_action"`
+	State             string    `json:"state"`
+	Resolution        string    `json:"resolution,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	ResolvedAt        time.Time `json:"resolved_at,omitempty"`
+}

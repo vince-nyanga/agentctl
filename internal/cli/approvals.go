@@ -11,20 +11,16 @@ func newApprovalsCommand(ctx *appContext) *cobra.Command {
 		Use:   "approvals",
 		Short: "Show pending approvals",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			state, err := ctx.store.Load()
+			approvals, err := ctx.store.ListApprovals("", "pending")
 			if err != nil {
 				return err
 			}
-			count := 0
-			for _, task := range state.Tasks {
-				if task.State != "planning" {
-					continue
-				}
-				count++
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\tplan_approval\t%s\n", task.ID, task.Goal)
-			}
-			if count == 0 {
+			if len(approvals) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "no pending approvals")
+				return nil
+			}
+			for _, approval := range approvals {
+				fmt.Fprintf(cmd.OutOrStdout(), "%d\t%s\t%s\t%s\t%s\n", approval.ID, approval.TaskID, approval.Type, approval.Risk, approval.Title)
 			}
 			return nil
 		},

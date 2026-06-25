@@ -72,6 +72,9 @@ func newAttachCommand(ctx *appContext) *cobra.Command {
 			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.attached", Message: "created planning workspace from existing worktrees"}); err != nil {
 				return err
 			}
+			if _, err := ctx.store.CreateApproval(core.Approval{TaskID: task.ID, Type: "plan", Title: "Approve task plan", Description: task.Goal, Risk: "medium", RecommendedAction: "review plan and approve when ready"}); err != nil {
+				return err
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "created attached task %s at %s\n", task.ID, task.Workspace)
 			return nil
 		},

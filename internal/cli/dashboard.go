@@ -32,7 +32,11 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 			if err != nil {
 				allEvents = nil
 			}
-			model := newDashboardModel(state, eventsByTask, allEvents)
+			approvals, err := ctx.store.ListApprovals("", "pending")
+			if err != nil {
+				approvals = nil
+			}
+			model := newDashboardModel(state, eventsByTask, allEvents, approvals)
 			_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
 			return err
 		},
@@ -47,10 +51,11 @@ type dashboardModel struct {
 	height    int
 	events    map[string][]core.Event
 	allEvents []core.Event
+	approvals []core.Approval
 	tab       int
 }
 
-func newDashboardModel(state core.State, events map[string][]core.Event, allEvents []core.Event) dashboardModel {
+func newDashboardModel(state core.State, events map[string][]core.Event, allEvents []core.Event, approvals []core.Approval) dashboardModel {
 	tasks := make([]core.Task, 0, len(state.Tasks))
 	for _, task := range state.Tasks {
 		tasks = append(tasks, task)
@@ -59,7 +64,7 @@ func newDashboardModel(state core.State, events map[string][]core.Event, allEven
 	if events == nil {
 		events = map[string][]core.Event{}
 	}
-	return dashboardModel{state: state, tasks: tasks, events: events, allEvents: allEvents}
+	return dashboardModel{state: state, tasks: tasks, events: events, allEvents: allEvents, approvals: approvals}
 }
 
 func (m dashboardModel) Init() tea.Cmd { return nil }
@@ -171,6 +176,7 @@ func (m dashboardModel) renderOverview(width int) string {
 		fmt.Sprintf("Archived:       %d", archived),
 		fmt.Sprintf("Agents:         %d", agents),
 		fmt.Sprintf("Needs attention:%d", len(m.attentionTasks())),
+		fmt.Sprintf("Approvals:      %d", len(m.approvals)),
 		fmt.Sprintf("Stopped agents: %d", stopped),
 	}
 	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Overview") + "\n\n" + strings.Join(metrics, "\n"))
@@ -260,10 +266,8 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 
 func (m dashboardModel) renderApprovals(width int) string {
 	var rows []string
-	for _, task := range m.tasks {
-		if task.State == "planning" {
-			rows = append(rows, fmt.Sprintf("- %s | plan approval | %s", task.ID, task.Goal))
-		}
+	for _, approval := range m.approvals {
+		rows = append(rows, fmt.Sprintf("- #%d | %s | %s | %s | %s", approval.ID, approval.TaskID, approval.Type, approval.Risk, approval.Title))
 	}
 	if len(rows) == 0 {
 		rows = append(rows, "No pending approvals.")

@@ -222,6 +222,20 @@ func migrate(ctx context.Context, db *sql.DB) error {
             message TEXT NOT NULL,
             created_at TEXT NOT NULL
         )`,
+		`CREATE TABLE IF NOT EXISTS approvals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL,
+            agent_name TEXT NOT NULL DEFAULT '',
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            risk TEXT NOT NULL DEFAULT '',
+            recommended_action TEXT NOT NULL DEFAULT '',
+            state TEXT NOT NULL,
+            resolution TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            resolved_at TEXT NOT NULL DEFAULT ''
+        )`,
 	}
 	for _, statement := range statements {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
@@ -446,6 +460,20 @@ func parseTime(value string) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+func formatOptionalTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return formatTime(t)
+}
+
+func parseOptionalTime(value string) time.Time {
+	if value == "" {
+		return time.Time{}
+	}
+	return parseTime(value)
 }
 
 func (s *Store) AddEvent(event Event) error {

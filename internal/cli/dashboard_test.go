@@ -23,7 +23,7 @@ func TestDashboardRendersRecentEvents(t *testing.T) {
 		task.ID: {
 			events[0],
 		},
-	}, events)
+	}, events, nil)
 	model.width = 120
 	model.tab = 4
 
@@ -38,7 +38,7 @@ func TestDashboardRendersRecentEvents(t *testing.T) {
 func TestDashboardRendersOverviewAndTabs(t *testing.T) {
 	state := core.DefaultState(t.TempDir())
 	state.Tasks["task-1"] = core.Task{ID: "task-1", Goal: "Goal", State: "planning", CreatedAt: time.Now()}
-	model := newDashboardModel(state, nil, nil)
+	model := newDashboardModel(state, nil, nil, []core.Approval{{ID: 1, TaskID: "task-1", Type: "plan", Title: "Approve task plan"}})
 	model.width = 120
 
 	view := model.View()
