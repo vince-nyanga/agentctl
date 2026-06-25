@@ -19,7 +19,7 @@ This first build includes:
 - OpenCode as the default manager/worker/reviewer harness.
 - tmux-backed manager and worker sessions.
 - Basic event log and `supervise` reconciliation command.
-- Bubble Tea TUI dashboard.
+- Bubble Tea TUI dashboard with recent task events.
 - GitHub PR creation command using `gh`.
 - Task archival cleanup for tmux sessions and git worktrees.
 

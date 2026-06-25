@@ -21,7 +21,14 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			model := newDashboardModel(state)
+			eventsByTask := map[string][]core.Event{}
+			for taskID := range state.Tasks {
+				events, err := ctx.store.ListEvents(taskID, 5)
+				if err == nil {
+					eventsByTask[taskID] = events
+				}
+			}
+			model := newDashboardModel(state, eventsByTask)
 			_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
 			return err
 		},
@@ -34,15 +41,19 @@ type dashboardModel struct {
 	selected int
 	width    int
 	height   int
+	events   map[string][]core.Event
 }
 
-func newDashboardModel(state core.State) dashboardModel {
+func newDashboardModel(state core.State, events map[string][]core.Event) dashboardModel {
 	tasks := make([]core.Task, 0, len(state.Tasks))
 	for _, task := range state.Tasks {
 		tasks = append(tasks, task)
 	}
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].CreatedAt.After(tasks[j].CreatedAt) })
-	return dashboardModel{state: state, tasks: tasks}
+	if events == nil {
+		events = map[string][]core.Event{}
+	}
+	return dashboardModel{state: state, tasks: tasks, events: events}
 }
 
 func (m dashboardModel) Init() tea.Cmd { return nil }
@@ -133,6 +144,21 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 	} else {
 		for _, agent := range task.Agents {
 			b.WriteString(fmt.Sprintf("• %s [%s/%s] %s\n  tmux: %s\n", agent.Name, agent.Role, agent.Harness, agent.State, agent.TmuxName))
+		}
+	}
+	b.WriteString("\n")
+	b.WriteString(sectionStyle.Render("Recent Events"))
+	b.WriteString("\n")
+	events := m.events[task.ID]
+	if len(events) == 0 {
+		b.WriteString("No events recorded yet.\n")
+	} else {
+		for _, event := range events {
+			actor := event.AgentName
+			if actor == "" {
+				actor = "system"
+			}
+			b.WriteString(fmt.Sprintf("• %s [%s] %s: %s\n", event.CreatedAt.Format("15:04:05"), actor, event.Type, event.Message))
 		}
 	}
 	return panelStyle.Width(width).Render(b.String())
