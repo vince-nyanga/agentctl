@@ -98,7 +98,14 @@ Create a planning-first multi-repo task:
   --repo frontend
 ```
 
-Dispatch repo workers after the manager has produced/refined briefs:
+Review the plan and optional repo briefs:
+
+```sh
+./agentctl review-plan <task-id>
+./agentctl review-plan <task-id> --briefs
+```
+
+Approve the plan after the manager has produced/refined briefs:
 
 ```sh
 ./agentctl approve-plan <task-id>

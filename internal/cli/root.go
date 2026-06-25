@@ -30,6 +30,7 @@ func Execute() error {
 	rootCmd.AddCommand(newRepoCommand(ctx))
 	rootCmd.AddCommand(newConfigCommand(ctx))
 	rootCmd.AddCommand(newPlanCommand(ctx))
+	rootCmd.AddCommand(newReviewPlanCommand(ctx))
 	rootCmd.AddCommand(newApprovePlanCommand(ctx))
 	rootCmd.AddCommand(newDispatchCommand(ctx))
 	rootCmd.AddCommand(newStatusCommand(ctx))
