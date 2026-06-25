@@ -32,6 +32,7 @@ func Execute() error {
 	rootCmd.AddCommand(newAFKCommand(ctx))
 	rootCmd.AddCommand(newRepoCommand(ctx))
 	rootCmd.AddCommand(newConfigCommand(ctx))
+	rootCmd.AddCommand(newManagerCommand(ctx))
 	rootCmd.AddCommand(newPlanCommand(ctx))
 	rootCmd.AddCommand(newAttachCommand(ctx))
 	rootCmd.AddCommand(newReviewPlanCommand(ctx))
