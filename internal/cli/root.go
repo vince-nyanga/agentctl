@@ -113,7 +113,8 @@ func newConfigCommand(ctx *appContext) *cobra.Command {
 			return nil
 		},
 	})
-	cmd.AddCommand(&cobra.Command{
+	var harnessMode string
+	setHarnessCmd := &cobra.Command{
 		Use:   "set-harness <name> <command> [args...]",
 		Short: "Add or update a harness command",
 		Args:  cobra.MinimumNArgs(2),
@@ -122,13 +123,18 @@ func newConfigCommand(ctx *appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			state.Config.Harnesses[args[0]] = core.Harness{Command: args[1], Args: args[2:]}
+			if harnessMode == "" {
+				harnessMode = "interactive"
+			}
+			state.Config.Harnesses[args[0]] = core.Harness{Command: args[1], Args: args[2:], Mode: harnessMode}
 			if err := ctx.store.Save(state); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "set harness %s\n", args[0])
 			return nil
 		},
-	})
+	}
+	setHarnessCmd.Flags().StringVar(&harnessMode, "mode", "interactive", "harness mode: interactive or prompt_arg")
+	cmd.AddCommand(setHarnessCmd)
 	return cmd
 }

@@ -26,7 +26,7 @@ func TestPrepareWorkerDispatchPrompt(t *testing.T) {
 		t.Fatalf("read prompt: %v", err)
 	}
 	text := string(data)
-	for _, want := range []string{"user has approved the plan", "Original Brief", "Do not implement until approved"} {
+	for _, want := range []string{"must now implement", "approval gate is now satisfied", "Original Brief", "Do not implement until approved"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, text)
 		}

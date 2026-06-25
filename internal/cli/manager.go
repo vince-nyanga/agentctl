@@ -53,30 +53,18 @@ func newManagerApplyCommand(ctx *appContext) *cobra.Command {
 			if !ok {
 				return fmt.Errorf("unknown task %q", args[0])
 			}
-			var text string
 			if fromTmux {
-				manager, err := findAgentByRole(task, "manager")
-				if err != nil {
-					return err
-				}
-				if !core.TmuxSessionExists(manager.TmuxName) {
-					return fmt.Errorf("manager session %s is not running", manager.TmuxName)
-				}
-				output, err := core.TailTmux(manager.TmuxName, lines)
-				if err != nil {
-					return err
-				}
-				text = output
-			} else {
-				if file == "" {
-					file = filepath.Join(task.Workspace, "manager-response.md")
-				}
-				data, err := os.ReadFile(file)
-				if err != nil {
-					return err
-				}
-				text = string(data)
+				return runManagerApplyFromTmux(ctx, task.ID, lines, cmd.OutOrStdout())
 			}
+			var text string
+			if file == "" {
+				file = filepath.Join(task.Workspace, "manager-response.md")
+			}
+			data, err := os.ReadFile(file)
+			if err != nil {
+				return err
+			}
+			text = string(data)
 			actions, err := core.ParseManagerActions(text)
 			if err != nil {
 				return err
@@ -94,6 +82,39 @@ func newManagerApplyCommand(ctx *appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&fromTmux, "from-tmux", false, "read action block from live manager tmux output")
 	cmd.Flags().IntVar(&lines, "lines", 300, "number of tmux lines to capture with --from-tmux")
 	return cmd
+}
+
+func runManagerApplyFromTmux(ctx *appContext, taskID string, lines int, out io.Writer) error {
+	state, err := ctx.store.Load()
+	if err != nil {
+		return err
+	}
+	task, ok := state.Tasks[taskID]
+	if !ok {
+		return fmt.Errorf("unknown task %q", taskID)
+	}
+	manager, err := findAgentByRole(task, "manager")
+	if err != nil {
+		return err
+	}
+	if !core.TmuxSessionExists(manager.TmuxName) {
+		return fmt.Errorf("manager session %s is not running", manager.TmuxName)
+	}
+	output, err := core.TailTmux(manager.TmuxName, lines)
+	if err != nil {
+		return err
+	}
+	actions, err := core.ParseManagerActions(output)
+	if err != nil {
+		return err
+	}
+	for _, action := range actions {
+		if err := applyManagerAction(ctx, &state, task, action); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(out, "applied %d manager actions\n", len(actions))
+	return nil
 }
 
 func applyManagerAction(ctx *appContext, state *core.State, task core.Task, action core.ManagerAction) error {

@@ -1,4 +1,4 @@
-.PHONY: fmt vet test build smoke check clean
+.PHONY: fmt vet test build smoke real-opencode-e2e check clean
 
 fmt:
 	gofmt -w .
@@ -14,6 +14,9 @@ build:
 
 smoke: build
 	scripts/smoke.sh
+
+real-opencode-e2e: build
+	scripts/real-opencode-e2e.sh
 
 check: fmt vet test build smoke
 

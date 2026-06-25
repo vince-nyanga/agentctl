@@ -65,6 +65,12 @@ make check
 `make check` runs formatting, `go vet`, unit tests, build, and an end-to-end smoke test against a temporary git repo.
 The smoke test covers both the repo/worktree lifecycle and a real tmux-backed manager session using a harmless `cat` harness.
 
+Run the opt-in real OpenCode manager/worker E2E test locally when OpenCode is authenticated:
+
+```sh
+make real-opencode-e2e
+```
+
 Equivalent manual commands:
 
 ```sh
@@ -114,6 +120,7 @@ Run the foreground supervision loop:
 ./agentctl daemon --once
 ./agentctl afk
 ./agentctl afk --manager-tick
+./agentctl afk --manager-tick --manager-apply
 ```
 
 Build or send an AI manager supervision prompt for a task:
@@ -129,6 +136,7 @@ Configure harness roles:
 
 ```sh
 ./agentctl config set-harness opencode opencode
+./agentctl config set-harness opencode-run opencode --mode prompt_arg -- run --dangerously-skip-permissions
 ./agentctl config set-role manager opencode
 ./agentctl config set-role worker opencode
 ./agentctl config set-role reviewer opencode
@@ -193,6 +201,8 @@ r         refresh state
 a         approve selected task plan
 d         dispatch selected approved task, asks y/n
 x         archive selected task, asks y/n
+m         send manager tick to selected task
+p         apply manager actions from selected task manager tmux
 q         quit
 ```
 

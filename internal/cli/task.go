@@ -188,7 +188,7 @@ func startAgent(state core.State, task core.Task, role, name, repo, workdir, pro
 
 func buildHarnessCommand(harness core.Harness, prompt string) (string, string) {
 	parts := append([]string{harness.Command}, harness.Args...)
-	if harness.Command == "opencode" && len(harness.Args) > 0 && harness.Args[0] == "run" {
+	if harness.Mode == "prompt_arg" || (harness.Command == "opencode" && len(harness.Args) > 0 && harness.Args[0] == "run") {
 		parts = append(parts, core.ShellQuote(prompt))
 		return strings.TrimSpace(strings.Join(parts, " ")), ""
 	}
@@ -210,7 +210,9 @@ func prepareWorkerDispatchPrompt(task core.Task, repo core.TaskRepo) (string, er
 Task: %s
 Repo: %s
 
-The user has approved the plan. You may now implement the requested change in this repo worktree.
+The user has approved the plan. You must now implement the requested change in this repo worktree.
+
+Important: the original brief below may contain stale text such as "do not implement until approved", "ready for approval", or "await approval". That approval gate is now satisfied. Treat this wrapper as the latest instruction and proceed with implementation.
 
 Rules:
 - Work only inside this repo worktree unless explicitly instructed otherwise.

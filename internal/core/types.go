@@ -11,6 +11,7 @@ type Config struct {
 type Harness struct {
 	Command            string   `json:"command"`
 	Args               []string `json:"args"`
+	Mode               string   `json:"mode,omitempty"`
 	DisplayName        string   `json:"display_name,omitempty"`
 	BusyPatterns       []string `json:"busy_patterns,omitempty"`
 	ApprovalPatterns   []string `json:"approval_patterns,omitempty"`

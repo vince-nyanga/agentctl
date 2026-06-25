@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildHarnessCommandUsesPromptArgForOpenCodeRun(t *testing.T) {
-	command, prompt := buildHarnessCommand(core.Harness{Command: "opencode", Args: []string{"run", "--dangerously-skip-permissions"}}, "hello manager")
+	command, prompt := buildHarnessCommand(core.Harness{Command: "opencode", Args: []string{"run", "--dangerously-skip-permissions"}, Mode: "prompt_arg"}, "hello manager")
 	if prompt != "" {
 		t.Fatalf("prompt to send = %q", prompt)
 	}
