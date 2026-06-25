@@ -167,6 +167,16 @@ Open the dashboard:
 ./agentctl dashboard
 ```
 
+Dashboard keys:
+
+```text
+h/l       switch tabs
+j/k       move task selection
+r         refresh state
+a         approve selected task plan
+q         quit
+```
+
 Attach to a running agent:
 
 ```sh

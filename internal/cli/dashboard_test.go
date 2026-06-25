@@ -48,3 +48,42 @@ func TestDashboardRendersOverviewAndTabs(t *testing.T) {
 		}
 	}
 }
+
+func TestDashboardApproveSelectedPlan(t *testing.T) {
+	store := core.NewStore(t.TempDir())
+	state, err := store.Load()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	task := core.Task{ID: "task-1", Goal: "Goal", State: "planning", Workspace: t.TempDir(), CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	state.Tasks[task.ID] = task
+	if err := store.Save(state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+	if _, err := store.CreateApproval(core.Approval{TaskID: task.ID, Type: "plan", Title: "Approve plan"}); err != nil {
+		t.Fatalf("create approval: %v", err)
+	}
+	model, err := loadDashboardModel(store)
+	if err != nil {
+		t.Fatalf("load dashboard: %v", err)
+	}
+	updated, _ := model.approveSelectedPlan()
+	updatedModel := updated.(dashboardModel)
+	if !strings.Contains(updatedModel.message, "approved plan") {
+		t.Fatalf("message = %q", updatedModel.message)
+	}
+	reloaded, err := store.Load()
+	if err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if reloaded.Tasks[task.ID].State != "plan_approved" {
+		t.Fatalf("state = %q", reloaded.Tasks[task.ID].State)
+	}
+	pending, err := store.ListApprovals(task.ID, "pending")
+	if err != nil {
+		t.Fatalf("list approvals: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending approvals = %#v", pending)
+	}
+}

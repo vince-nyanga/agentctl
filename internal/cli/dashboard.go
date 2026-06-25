@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,26 +18,10 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 		Use:   "dashboard",
 		Short: "Open the Agent Mission Control TUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			state, err := ctx.store.Load()
+			model, err := loadDashboardModel(ctx.store)
 			if err != nil {
 				return err
 			}
-			eventsByTask := map[string][]core.Event{}
-			for taskID := range state.Tasks {
-				events, err := ctx.store.ListEvents(taskID, 5)
-				if err == nil {
-					eventsByTask[taskID] = events
-				}
-			}
-			allEvents, err := ctx.store.ListEvents("", 30)
-			if err != nil {
-				allEvents = nil
-			}
-			approvals, err := ctx.store.ListApprovals("", "pending")
-			if err != nil {
-				approvals = nil
-			}
-			model := newDashboardModel(state, eventsByTask, allEvents, approvals)
 			_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
 			return err
 		},
@@ -45,6 +30,7 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 
 type dashboardModel struct {
 	state     core.State
+	store     *core.Store
 	tasks     []core.Task
 	selected  int
 	width     int
@@ -53,6 +39,32 @@ type dashboardModel struct {
 	allEvents []core.Event
 	approvals []core.Approval
 	tab       int
+	message   string
+}
+
+func loadDashboardModel(store *core.Store) (dashboardModel, error) {
+	state, err := store.Load()
+	if err != nil {
+		return dashboardModel{}, err
+	}
+	eventsByTask := map[string][]core.Event{}
+	for taskID := range state.Tasks {
+		events, err := store.ListEvents(taskID, 5)
+		if err == nil {
+			eventsByTask[taskID] = events
+		}
+	}
+	allEvents, err := store.ListEvents("", 30)
+	if err != nil {
+		allEvents = nil
+	}
+	approvals, err := store.ListApprovals("", "pending")
+	if err != nil {
+		approvals = nil
+	}
+	model := newDashboardModel(state, eventsByTask, allEvents, approvals)
+	model.store = store
+	return model, nil
 }
 
 func newDashboardModel(state core.State, events map[string][]core.Event, allEvents []core.Event, approvals []core.Approval) dashboardModel {
@@ -93,6 +105,10 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tab < 0 {
 				m.tab = len(dashboardTabs) - 1
 			}
+		case key.Matches(msg, key.NewBinding(key.WithKeys("r"))):
+			return m.refresh()
+		case key.Matches(msg, key.NewBinding(key.WithKeys("a"))):
+			return m.approveSelectedPlan()
 		}
 	}
 	return m, nil
@@ -104,13 +120,79 @@ func (m dashboardModel) View() string {
 	}
 	header := titleStyle.Width(m.width).Render("Agent Mission Control")
 	tabs := m.renderTabs(m.width)
-	footer := footerStyle.Width(m.width).Render("h/l switch tabs | j/k move tasks | q quit | open: agentctl open <task> --agent <name>")
+	footerText := "h/l tabs | j/k tasks | r refresh | a approve plan | q quit | open: agentctl open <task> --agent <name>"
+	if m.message != "" {
+		footerText = m.message + " | " + footerText
+	}
+	footer := footerStyle.Width(m.width).Render(footerText)
 	if len(m.tasks) == 0 {
 		return lipgloss.JoinVertical(lipgloss.Left, header, tabs, emptyStyle.Render("No tasks yet. Start with: agentctl plan \"Your goal\" --repo <name>"), footer)
 	}
 
 	body := m.renderActiveTab(m.width)
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer)
+}
+
+func (m dashboardModel) refresh() (tea.Model, tea.Cmd) {
+	if m.store == nil {
+		m.message = "refresh unavailable"
+		return m, nil
+	}
+	refreshed, err := loadDashboardModel(m.store)
+	if err != nil {
+		m.message = "refresh failed: " + err.Error()
+		return m, nil
+	}
+	refreshed.width = m.width
+	refreshed.height = m.height
+	refreshed.tab = m.tab
+	if m.selected < len(refreshed.tasks) {
+		refreshed.selected = m.selected
+	}
+	refreshed.message = "refreshed"
+	return refreshed, nil
+}
+
+func (m dashboardModel) approveSelectedPlan() (tea.Model, tea.Cmd) {
+	if m.store == nil {
+		m.message = "approval unavailable"
+		return m, nil
+	}
+	if len(m.tasks) == 0 {
+		m.message = "no task selected"
+		return m, nil
+	}
+	task := m.tasks[m.selected]
+	if task.State != "planning" {
+		m.message = "selected task is not awaiting plan approval"
+		return m, nil
+	}
+	state, err := m.store.Load()
+	if err != nil {
+		m.message = "approval failed: " + err.Error()
+		return m, nil
+	}
+	task = state.Tasks[task.ID]
+	task.State = "plan_approved"
+	task.UpdatedAt = time.Now()
+	state.Tasks[task.ID] = task
+	if err := m.store.Save(state); err != nil {
+		m.message = "approval failed: " + err.Error()
+		return m, nil
+	}
+	approvals, err := m.store.ListApprovals(task.ID, "pending")
+	if err == nil {
+		for _, approval := range approvals {
+			if approval.Type == "plan" {
+				_, _ = m.store.ResolveApproval(approval.ID, "approved")
+			}
+		}
+	}
+	_ = m.store.AddEvent(core.Event{TaskID: task.ID, Type: "plan.approved", Message: "plan approved from dashboard"})
+	refreshed, _ := m.refresh()
+	next := refreshed.(dashboardModel)
+	next.message = "approved plan for " + task.ID
+	return next, nil
 }
 
 var dashboardTabs = []string{"Overview", "Tasks", "Approvals", "Blocked", "Events", "Detail"}
