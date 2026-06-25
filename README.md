@@ -179,6 +179,12 @@ Inspect one task without opening the TUI:
 ./agentctl inspect <task-id>
 ```
 
+Show tasks that need attention:
+
+```sh
+./agentctl blocked
+```
+
 Read recent output for a tracked agent:
 
 ```sh
