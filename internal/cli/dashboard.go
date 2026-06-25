@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ type dashboardModel struct {
 	approvals []core.Approval
 	tab       int
 	message   string
+	pending   string
 }
 
 func loadDashboardModel(store *core.Store) (dashboardModel, error) {
@@ -87,6 +89,16 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tea.KeyMsg:
+		if m.pending != "" {
+			switch {
+			case key.Matches(msg, key.NewBinding(key.WithKeys("y"))):
+				return m.confirmPending()
+			case key.Matches(msg, key.NewBinding(key.WithKeys("n", "esc"))):
+				m.message = "cancelled " + m.pending
+				m.pending = ""
+				return m, nil
+			}
+		}
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "ctrl+c", "esc"))):
 			return m, tea.Quit
@@ -109,6 +121,10 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.refresh()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("a"))):
 			return m.approveSelectedPlan()
+		case key.Matches(msg, key.NewBinding(key.WithKeys("d"))):
+			return m.stageAction("dispatch")
+		case key.Matches(msg, key.NewBinding(key.WithKeys("x"))):
+			return m.stageAction("archive")
 		}
 	}
 	return m, nil
@@ -120,7 +136,10 @@ func (m dashboardModel) View() string {
 	}
 	header := titleStyle.Width(m.width).Render("Agent Mission Control")
 	tabs := m.renderTabs(m.width)
-	footerText := "h/l tabs | j/k tasks | r refresh | a approve plan | q quit | open: agentctl open <task> --agent <name>"
+	footerText := "h/l tabs | j/k tasks | r refresh | a approve | d dispatch | x archive | q quit"
+	if m.pending != "" {
+		footerText = "confirm " + m.pending + "? y/n"
+	}
 	if m.message != "" {
 		footerText = m.message + " | " + footerText
 	}
@@ -131,6 +150,31 @@ func (m dashboardModel) View() string {
 
 	body := m.renderActiveTab(m.width)
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer)
+}
+
+func (m dashboardModel) stageAction(action string) (tea.Model, tea.Cmd) {
+	if len(m.tasks) == 0 {
+		m.message = "no task selected"
+		return m, nil
+	}
+	m.pending = action
+	m.message = action + " staged for " + m.tasks[m.selected].ID
+	return m, nil
+}
+
+func (m dashboardModel) confirmPending() (tea.Model, tea.Cmd) {
+	switch m.pending {
+	case "dispatch":
+		m.pending = ""
+		return m.dispatchSelectedTask()
+	case "archive":
+		m.pending = ""
+		return m.archiveSelectedTask()
+	default:
+		m.message = "unknown pending action"
+		m.pending = ""
+		return m, nil
+	}
 }
 
 func (m dashboardModel) refresh() (tea.Model, tea.Cmd) {
@@ -192,6 +236,102 @@ func (m dashboardModel) approveSelectedPlan() (tea.Model, tea.Cmd) {
 	refreshed, _ := m.refresh()
 	next := refreshed.(dashboardModel)
 	next.message = "approved plan for " + task.ID
+	return next, nil
+}
+
+func (m dashboardModel) dispatchSelectedTask() (tea.Model, tea.Cmd) {
+	if m.store == nil {
+		m.message = "dispatch unavailable"
+		return m, nil
+	}
+	if len(m.tasks) == 0 {
+		m.message = "no task selected"
+		return m, nil
+	}
+	state, err := m.store.Load()
+	if err != nil {
+		m.message = "dispatch failed: " + err.Error()
+		return m, nil
+	}
+	task := state.Tasks[m.tasks[m.selected].ID]
+	if task.State != "plan_approved" {
+		m.message = "dispatch requires approved plan"
+		return m, nil
+	}
+	for _, repo := range task.Repos {
+		briefPath := filepath.Join(task.Workspace, "briefs", repo.Name+".md")
+		agentName := repo.Name + "-agent"
+		agent, err := startAgent(state, task, "worker", agentName, repo.Name, repo.WorktreePath, briefPath)
+		if err != nil {
+			m.message = "dispatch failed: " + err.Error()
+			return m, nil
+		}
+		task.Agents = append(task.Agents, agent)
+	}
+	task.State = "running"
+	task.UpdatedAt = time.Now()
+	state.Tasks[task.ID] = task
+	if err := m.store.Save(state); err != nil {
+		m.message = "dispatch failed: " + err.Error()
+		return m, nil
+	}
+	_ = m.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.dispatched", Message: fmt.Sprintf("dispatched %d workers from dashboard", len(task.Repos))})
+	refreshed, _ := m.refresh()
+	next := refreshed.(dashboardModel)
+	next.message = "dispatched " + task.ID
+	return next, nil
+}
+
+func (m dashboardModel) archiveSelectedTask() (tea.Model, tea.Cmd) {
+	if m.store == nil {
+		m.message = "archive unavailable"
+		return m, nil
+	}
+	if len(m.tasks) == 0 {
+		m.message = "no task selected"
+		return m, nil
+	}
+	state, err := m.store.Load()
+	if err != nil {
+		m.message = "archive failed: " + err.Error()
+		return m, nil
+	}
+	task := state.Tasks[m.tasks[m.selected].ID]
+	for _, agent := range task.Agents {
+		if err := core.KillTmuxSession(agent.TmuxName); err != nil {
+			m.message = "archive failed: " + err.Error()
+			return m, nil
+		}
+	}
+	for _, repo := range task.Repos {
+		if !repo.Owned {
+			continue
+		}
+		status := core.GitStatusShort(repo.WorktreePath)
+		if core.IsDirtyStatus(status) {
+			m.message = "archive blocked: dirty worktree " + repo.Name
+			return m, nil
+		}
+		if err := core.RemoveWorktree(repo.SourcePath, repo.WorktreePath); err != nil {
+			m.message = "archive failed: " + err.Error()
+			return m, nil
+		}
+		_ = core.PruneWorktrees(repo.SourcePath)
+	}
+	for i := range task.Agents {
+		task.Agents[i].State = "stopped"
+	}
+	task.State = "archived"
+	task.UpdatedAt = time.Now()
+	state.Tasks[task.ID] = task
+	if err := m.store.Save(state); err != nil {
+		m.message = "archive failed: " + err.Error()
+		return m, nil
+	}
+	_ = m.store.AddEvent(core.Event{TaskID: task.ID, Type: "task.archived", Message: "archived task from dashboard"})
+	refreshed, _ := m.refresh()
+	next := refreshed.(dashboardModel)
+	next.message = "archived " + task.ID
 	return next, nil
 }
 

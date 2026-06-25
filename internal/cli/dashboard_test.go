@@ -87,3 +87,17 @@ func TestDashboardApproveSelectedPlan(t *testing.T) {
 		t.Fatalf("pending approvals = %#v", pending)
 	}
 }
+
+func TestDashboardStageAction(t *testing.T) {
+	state := core.DefaultState(t.TempDir())
+	state.Tasks["task-1"] = core.Task{ID: "task-1", Goal: "Goal", State: "plan_approved", CreatedAt: time.Now()}
+	model := newDashboardModel(state, nil, nil, nil)
+	updated, _ := model.stageAction("dispatch")
+	updatedModel := updated.(dashboardModel)
+	if updatedModel.pending != "dispatch" {
+		t.Fatalf("pending = %q", updatedModel.pending)
+	}
+	if !strings.Contains(updatedModel.message, "task-1") {
+		t.Fatalf("message = %q", updatedModel.message)
+	}
+}

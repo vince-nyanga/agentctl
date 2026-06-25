@@ -190,6 +190,8 @@ h/l       switch tabs
 j/k       move task selection
 r         refresh state
 a         approve selected task plan
+d         dispatch selected approved task, asks y/n
+x         archive selected task, asks y/n
 q         quit
 ```
 
