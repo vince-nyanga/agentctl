@@ -47,6 +47,7 @@ func Execute() error {
 	rootCmd.AddCommand(newEventsCommand(ctx))
 	rootCmd.AddCommand(newSuperviseCommand(ctx))
 	rootCmd.AddCommand(newDashboardCommand(ctx))
+	rootCmd.AddCommand(newWebCommand(ctx))
 	rootCmd.AddCommand(newOpenCommand(ctx))
 	rootCmd.AddCommand(newPRCommand(ctx))
 	rootCmd.AddCommand(newDoneCommand(ctx))

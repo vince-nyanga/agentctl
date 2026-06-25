@@ -167,6 +167,7 @@ Open the dashboard:
 
 ```sh
 ./agentctl dashboard
+./agentctl web
 ```
 
 Dashboard keys:
