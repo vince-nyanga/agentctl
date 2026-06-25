@@ -30,3 +30,21 @@ END_AGENTCTL_ACTIONS`)
 		t.Fatalf("expected unsupported action error")
 	}
 }
+
+func TestParseManagerActionsUsesLastBlock(t *testing.T) {
+	text := `AGENTCTL_ACTIONS:
+[{"type":"approval","title":"template"}]
+END_AGENTCTL_ACTIONS
+
+manager response
+AGENTCTL_ACTIONS:
+[{"type":"done","message":"actual"}]
+END_AGENTCTL_ACTIONS`
+	actions, err := ParseManagerActions(text)
+	if err != nil {
+		t.Fatalf("ParseManagerActions() error = %v", err)
+	}
+	if len(actions) != 1 || actions[0].Type != "done" || actions[0].Message != "actual" {
+		t.Fatalf("actions = %#v", actions)
+	}
+}

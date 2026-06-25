@@ -21,7 +21,7 @@ type ManagerAction struct {
 }
 
 func ParseManagerActions(text string) ([]ManagerAction, error) {
-	start := strings.Index(text, actionBlockStart)
+	start := strings.LastIndex(text, actionBlockStart)
 	if start == -1 {
 		return nil, nil
 	}

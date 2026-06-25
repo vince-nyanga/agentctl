@@ -48,7 +48,7 @@ func TailTmux(target string, lines int) (string, error) {
 	if lines <= 0 {
 		lines = 40
 	}
-	out, err := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-S", fmt.Sprintf("-%d", lines)).Output()
+	out, err := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-J", "-S", fmt.Sprintf("-%d", lines)).Output()
 	return string(out), err
 }
 
