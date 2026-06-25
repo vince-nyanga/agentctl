@@ -30,7 +30,7 @@ func StartTmuxAgent(sessionName, workdir, command, prompt, logPath string) error
 		if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 			return err
 		}
-		pipeCommand := "cat >> " + shellQuote(logPath)
+		pipeCommand := "cat >> " + ShellQuote(logPath)
 		if err := exec.Command("tmux", "pipe-pane", "-o", "-t", sessionName, pipeCommand).Run(); err != nil {
 			return err
 		}
@@ -41,7 +41,7 @@ func StartTmuxAgent(sessionName, workdir, command, prompt, logPath string) error
 	return nil
 }
 
-func shellQuote(value string) string {
+func ShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 

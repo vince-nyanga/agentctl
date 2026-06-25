@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -259,7 +258,11 @@ func (m dashboardModel) dispatchSelectedTask() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, repo := range task.Repos {
-		briefPath := filepath.Join(task.Workspace, "briefs", repo.Name+".md")
+		briefPath, err := prepareWorkerDispatchPrompt(task, repo)
+		if err != nil {
+			m.message = "dispatch failed: " + err.Error()
+			return m, nil
+		}
 		agentName := repo.Name + "-agent"
 		agent, err := startAgent(state, task, "worker", agentName, repo.Name, repo.WorktreePath, briefPath)
 		if err != nil {

@@ -177,10 +177,53 @@ func startAgent(state core.State, task core.Task, role, name, repo, workdir, pro
 		return core.Agent{}, err
 	}
 	tmuxName := fmt.Sprintf("agentctl-%s-%s", task.ID, name)
-	command := strings.TrimSpace(strings.Join(append([]string{harness.Command}, harness.Args...), " "))
+	promptText := string(prompt)
+	command, promptToSend := buildHarnessCommand(harness, promptText)
 	logPath := filepath.Join(task.Workspace, "logs", name+".log")
-	if err := core.StartTmuxAgent(tmuxName, workdir, command, string(prompt), logPath); err != nil {
+	if err := core.StartTmuxAgent(tmuxName, workdir, command, promptToSend, logPath); err != nil {
 		return core.Agent{}, err
 	}
 	return core.Agent{Name: name, Role: role, Harness: harnessName, Repo: repo, State: "running", TmuxName: tmuxName, Workdir: workdir, LogPath: logPath, CreatedAt: time.Now()}, nil
+}
+
+func buildHarnessCommand(harness core.Harness, prompt string) (string, string) {
+	parts := append([]string{harness.Command}, harness.Args...)
+	if harness.Command == "opencode" && len(harness.Args) > 0 && harness.Args[0] == "run" {
+		parts = append(parts, core.ShellQuote(prompt))
+		return strings.TrimSpace(strings.Join(parts, " ")), ""
+	}
+	return strings.TrimSpace(strings.Join(parts, " ")), prompt
+}
+
+func prepareWorkerDispatchPrompt(task core.Task, repo core.TaskRepo) (string, error) {
+	briefPath := filepath.Join(task.Workspace, "briefs", repo.Name+".md")
+	brief, err := os.ReadFile(briefPath)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(task.Workspace, "dispatch-prompts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	prompt := fmt.Sprintf(`# Approved Implementation Brief
+
+Task: %s
+Repo: %s
+
+The user has approved the plan. You may now implement the requested change in this repo worktree.
+
+Rules:
+- Work only inside this repo worktree unless explicitly instructed otherwise.
+- Keep the implementation minimal and aligned with the approved brief.
+- Run the verification commands listed in the brief when possible.
+- Do not merge, deploy, or delete unrelated files.
+
+--- Original Brief ---
+
+%s`, task.ID, repo.Name, string(brief))
+	out := filepath.Join(dir, repo.Name+".md")
+	if err := os.WriteFile(out, []byte(prompt), 0o644); err != nil {
+		return "", err
+	}
+	return out, nil
 }
