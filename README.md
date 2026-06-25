@@ -212,6 +212,12 @@ Create a PR for a task repo:
 
 PR creation refuses dirty worktrees by default, pushes the task branch to `origin`, then calls `gh pr create`.
 
+Mark a task done without cleaning up its sessions/worktrees:
+
+```sh
+./agentctl done <task-id>
+```
+
 Archive a completed task and clean up agent sessions/worktrees:
 
 ```sh
