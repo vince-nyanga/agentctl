@@ -18,6 +18,26 @@ func Execute() error {
 	rootCmd := &cobra.Command{
 		Use:   "agentctl",
 		Short: "Agent Mission Control for multi-repo coding-agent workflows",
+		Long: `Agent Mission Control for multi-repo coding-agent workflows.
+
+Run agentctl with no command to open the dashboard.
+
+Common flow:
+  agentctl doctor
+  agentctl repo scan ~/Src --register
+  agentctl plan "Implement a small safe change" --repo backend --repo frontend
+  agentctl dashboard
+
+Useful direct commands:
+  agentctl status
+  agentctl approvals
+  agentctl blocked
+  agentctl inspect <task-id>
+  agentctl logs <task-id> --agent <agent-name>
+  agentctl open <task-id> --agent <agent-name>`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDashboard(ctx.store)
+		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			ctx.store = core.NewStore(ctx.root)
 			return ctx.store.Init()

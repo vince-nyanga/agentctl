@@ -81,6 +81,12 @@ go build -o agentctl .
 
 ## Basic Usage
 
+Open the main TUI dashboard:
+
+```sh
+agentctl
+```
+
 Initialize state:
 
 ```sh
@@ -209,6 +215,7 @@ q         quit
 Attach to a running agent:
 
 ```sh
+./agentctl open
 ./agentctl open <task-id> --agent manager-agent
 ```
 

@@ -18,14 +18,18 @@ func newDashboardCommand(ctx *appContext) *cobra.Command {
 		Use:   "dashboard",
 		Short: "Open the Agent Mission Control TUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			model, err := loadDashboardModel(ctx.store)
-			if err != nil {
-				return err
-			}
-			_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
-			return err
+			return runDashboard(ctx.store)
 		},
 	}
+}
+
+func runDashboard(store *core.Store) error {
+	model, err := loadDashboardModel(store)
+	if err != nil {
+		return err
+	}
+	_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
+	return err
 }
 
 type dashboardModel struct {
