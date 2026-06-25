@@ -23,6 +23,10 @@ func DBPath(root string) string {
 	return filepath.Join(root, "agentctl.db")
 }
 
+func DaemonLockPath(root string) string {
+	return filepath.Join(root, "daemon.lock")
+}
+
 func TasksDir(root string) string {
 	return filepath.Join(root, "tasks")
 }

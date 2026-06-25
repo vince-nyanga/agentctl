@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/vince-nyanga/agentctl/internal/core"
 )
 
 func newDaemonCommand(ctx *appContext) *cobra.Command {
@@ -43,6 +45,13 @@ func newAFKCommand(ctx *appContext) *cobra.Command {
 }
 
 func runSupervisionLoop(cmd *cobra.Command, ctx *appContext, interval time.Duration, once bool, managerTick bool) error {
+	if !once {
+		release, err := acquireDaemonLock(ctx.store.Root())
+		if err != nil {
+			return err
+		}
+		defer release()
+	}
 	runCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	for {
@@ -60,6 +69,20 @@ func runSupervisionLoop(cmd *cobra.Command, ctx *appContext, interval time.Durat
 		case <-time.After(interval):
 		}
 	}
+}
+
+func acquireDaemonLock(root string) (func(), error) {
+	path := core.DaemonLockPath(root)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("daemon already appears to be running for %s; remove %s if this is stale", root, path)
+		}
+		return nil, err
+	}
+	_, _ = fmt.Fprintf(file, "%d\n", os.Getpid())
+	_ = file.Close()
+	return func() { _ = os.Remove(path) }, nil
 }
 
 func superviseAll(ctx *appContext, managerTick bool) (int, error) {

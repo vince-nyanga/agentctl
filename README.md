@@ -20,6 +20,7 @@ This first build includes:
 - tmux-backed manager and worker sessions.
 - Basic event log and `supervise` reconciliation command.
 - Supervision snapshots live tmux output to per-agent log files.
+- Foreground daemon/AFK loop uses a root-scoped lock file to prevent duplicate supervisors.
 - Bubble Tea TUI dashboard with recent task events.
 - GitHub PR creation command using `gh`.
 - Task archival cleanup for tmux sessions and git worktrees.
