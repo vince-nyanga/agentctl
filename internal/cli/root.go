@@ -26,6 +26,7 @@ func Execute() error {
 	rootCmd.PersistentFlags().StringVar(&ctx.root, "root", core.ConfigFromEnv(), "agentctl state root")
 
 	rootCmd.AddCommand(newInitCommand(ctx))
+	rootCmd.AddCommand(newVersionCommand())
 	rootCmd.AddCommand(newDoctorCommand(ctx))
 	rootCmd.AddCommand(newRepoCommand(ctx))
 	rootCmd.AddCommand(newConfigCommand(ctx))

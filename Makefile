@@ -1,4 +1,4 @@
-.PHONY: fmt test build check clean
+.PHONY: fmt vet test build check clean
 
 fmt:
 	gofmt -w .
@@ -6,10 +6,13 @@ fmt:
 test:
 	go test ./...
 
+vet:
+	go vet ./...
+
 build:
 	go build -o agentctl .
 
-check: fmt test build
+check: fmt vet test build
 
 clean:
 	rm -f agentctl

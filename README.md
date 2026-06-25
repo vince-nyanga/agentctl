@@ -35,6 +35,14 @@ Daemonized supervision, richer approvals, and remote monitoring are specified in
 
 ## Build
 
+Install from GitHub:
+
+```sh
+go install github.com/vince-nyanga/agentctl@latest
+```
+
+Build from a local checkout:
+
 ```sh
 make check
 ```
