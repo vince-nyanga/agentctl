@@ -128,6 +128,12 @@ Inspect recent events:
 ./agentctl events --task <task-id> --limit 50
 ```
 
+Inspect one task without opening the TUI:
+
+```sh
+./agentctl inspect <task-id>
+```
+
 Create a PR for a task repo:
 
 ```sh
