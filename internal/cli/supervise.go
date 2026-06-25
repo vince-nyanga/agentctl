@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -39,8 +41,13 @@ func reconcileTaskAgents(store *core.Store, state *core.State, taskID string) (c
 		nextState := "stopped"
 		if core.TmuxSessionExists(agent.TmuxName) {
 			nextState = "running"
+			output := ""
+			if captured, err := core.TailTmux(agent.TmuxName, 200); err == nil {
+				output = captured
+				_ = persistAgentOutput(*agent, output)
+			}
 			if harness, ok := state.Config.Harnesses[agent.Harness]; ok {
-				if output, err := core.TailTmux(agent.TmuxName, 80); err == nil {
+				if output != "" {
 					classified := core.ClassifyHarnessOutput(harness, output)
 					if classified == "waiting_for_approval" || classified == "idle" {
 						nextState = classified
@@ -65,4 +72,14 @@ func reconcileTaskAgents(store *core.Store, state *core.State, taskID string) (c
 		}
 	}
 	return task, changed, nil
+}
+
+func persistAgentOutput(agent core.Agent, output string) error {
+	if agent.LogPath == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(agent.LogPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(agent.LogPath, []byte(output), 0o644)
 }
