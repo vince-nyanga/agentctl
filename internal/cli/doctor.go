@@ -40,7 +40,11 @@ func newDoctorCommand(ctx *appContext) *cobra.Command {
 			for _, name := range names {
 				harness := state.Config.Harnesses[name]
 				ok := harness.Command != "" && core.HasCommand(harness.Command)
-				fmt.Fprintf(out, "  %-10s", name)
+				label := name
+				if harness.DisplayName != "" {
+					label = harness.DisplayName
+				}
+				fmt.Fprintf(out, "  %-14s", label)
 				printCheck(out, harness.Command, ok)
 			}
 

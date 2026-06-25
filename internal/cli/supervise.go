@@ -39,6 +39,14 @@ func reconcileTaskAgents(store *core.Store, state *core.State, taskID string) (c
 		nextState := "stopped"
 		if core.TmuxSessionExists(agent.TmuxName) {
 			nextState = "running"
+			if harness, ok := state.Config.Harnesses[agent.Harness]; ok {
+				if output, err := core.TailTmux(agent.TmuxName, 80); err == nil {
+					classified := core.ClassifyHarnessOutput(harness, output)
+					if classified == "waiting_for_approval" || classified == "idle" {
+						nextState = classified
+					}
+				}
+			}
 		}
 		if agent.State != nextState {
 			previous := agent.State
