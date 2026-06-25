@@ -38,6 +38,10 @@ func newArchiveCommand(ctx *appContext) *cobra.Command {
 			if !keepWorktrees {
 				seenSources := map[string]bool{}
 				for _, repo := range task.Repos {
+					if !repo.Owned {
+						fmt.Fprintf(cmd.OutOrStdout(), "kept attached worktree %s\n", repo.WorktreePath)
+						continue
+					}
 					status := core.GitStatusShort(repo.WorktreePath)
 					if core.IsDirtyStatus(status) && !force {
 						return fmt.Errorf("worktree %s has uncommitted changes; inspect it or rerun with --force", repo.WorktreePath)

@@ -42,7 +42,7 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 				if err := core.CreateWorktree(repo.Path, branch, worktreePath); err != nil {
 					return err
 				}
-				task.Repos = append(task.Repos, core.TaskRepo{Name: repoName, SourcePath: repo.Path, WorktreePath: worktreePath, Branch: branch})
+				task.Repos = append(task.Repos, core.TaskRepo{Name: repoName, SourcePath: repo.Path, WorktreePath: worktreePath, Branch: branch, Owned: true})
 			}
 
 			if err := core.CreateTaskWorkspace(ctx.store.Root(), task); err != nil {

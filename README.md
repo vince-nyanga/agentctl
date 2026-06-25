@@ -98,6 +98,16 @@ Create a planning-first multi-repo task:
   --repo frontend
 ```
 
+Create a task from worktrees you already created manually:
+
+```sh
+./agentctl attach "Add refresh-token auth flow" \
+  --repo backend=~/Src/worktrees/backend-auth-refresh \
+  --repo frontend=~/Src/worktrees/frontend-auth-refresh
+```
+
+Attached worktrees are not removed by `archive`; only worktrees created by `agentctl plan` are cleaned up automatically.
+
 Review the plan and optional repo briefs:
 
 ```sh

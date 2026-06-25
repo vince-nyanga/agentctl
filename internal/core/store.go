@@ -196,6 +196,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
             source_path TEXT NOT NULL,
             worktree_path TEXT NOT NULL,
             branch TEXT NOT NULL,
+            owned INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (task_id, name),
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
         )`,
@@ -227,7 +228,36 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+	if err := ensureColumn(ctx, db, "task_repos", "owned", `ALTER TABLE task_repos ADD COLUMN owned INTEGER NOT NULL DEFAULT 1`); err != nil {
+		return err
+	}
 	return nil
+}
+
+func ensureColumn(ctx context.Context, db *sql.DB, table, column, alter string) error {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, alter)
+	return err
 }
 
 func saveConfig(ctx context.Context, tx *sql.Tx, config Config) error {
@@ -327,7 +357,7 @@ func loadTasks(ctx context.Context, db *sql.DB) (map[string]Task, error) {
 }
 
 func loadTaskRepos(ctx context.Context, db *sql.DB, taskID string) ([]TaskRepo, error) {
-	rows, err := db.QueryContext(ctx, `SELECT name, source_path, worktree_path, branch FROM task_repos WHERE task_id = ? ORDER BY name`, taskID)
+	rows, err := db.QueryContext(ctx, `SELECT name, source_path, worktree_path, branch, owned FROM task_repos WHERE task_id = ? ORDER BY name`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -335,9 +365,11 @@ func loadTaskRepos(ctx context.Context, db *sql.DB, taskID string) ([]TaskRepo, 
 	var repos []TaskRepo
 	for rows.Next() {
 		var repo TaskRepo
-		if err := rows.Scan(&repo.Name, &repo.SourcePath, &repo.WorktreePath, &repo.Branch); err != nil {
+		var owned int
+		if err := rows.Scan(&repo.Name, &repo.SourcePath, &repo.WorktreePath, &repo.Branch, &owned); err != nil {
 			return nil, err
 		}
+		repo.Owned = owned == 1
 		repos = append(repos, repo)
 	}
 	return repos, rows.Err()
@@ -373,7 +405,11 @@ func insertTask(ctx context.Context, tx *sql.Tx, task Task) error {
 		return err
 	}
 	for _, repo := range task.Repos {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO task_repos(task_id, name, source_path, worktree_path, branch) VALUES(?, ?, ?, ?, ?)`, task.ID, repo.Name, repo.SourcePath, repo.WorktreePath, repo.Branch); err != nil {
+		owned := 0
+		if repo.Owned {
+			owned = 1
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO task_repos(task_id, name, source_path, worktree_path, branch, owned) VALUES(?, ?, ?, ?, ?, ?)`, task.ID, repo.Name, repo.SourcePath, repo.WorktreePath, repo.Branch, owned); err != nil {
 			return err
 		}
 	}

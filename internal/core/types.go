@@ -37,6 +37,7 @@ type TaskRepo struct {
 	SourcePath   string `json:"source_path"`
 	WorktreePath string `json:"worktree_path"`
 	Branch       string `json:"branch"`
+	Owned        bool   `json:"owned"`
 }
 
 type Agent struct {
