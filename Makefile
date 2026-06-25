@@ -1,4 +1,4 @@
-.PHONY: fmt vet test build check clean
+.PHONY: fmt vet test build smoke check clean
 
 fmt:
 	gofmt -w .
@@ -12,7 +12,10 @@ vet:
 build:
 	go build -o agentctl .
 
-check: fmt vet test build
+smoke: build
+	scripts/smoke.sh
+
+check: fmt vet test build smoke
 
 clean:
 	rm -f agentctl

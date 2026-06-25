@@ -47,6 +47,9 @@ Build from a local checkout:
 make check
 ```
 
+`make check` runs formatting, `go vet`, unit tests, build, and an end-to-end smoke test against a temporary git repo.
+The smoke test covers both the repo/worktree lifecycle and a real tmux-backed manager session using a harmless `cat` harness.
+
 Equivalent manual commands:
 
 ```sh
