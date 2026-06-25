@@ -123,6 +123,22 @@ func CurrentBranch(path string) string {
 	return strings.TrimSpace(string(out))
 }
 
+func GitDiff(path, base string, stat bool) (string, error) {
+	if base == "" {
+		base = "HEAD"
+	}
+	args := []string{"-C", path, "diff"}
+	if stat {
+		args = append(args, "--stat")
+	}
+	args = append(args, base+"...")
+	out, err := exec.Command("git", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git diff failed: %s", strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
 func CreatePullRequest(path, title, body string) error {
 	if !HasCommand("gh") {
 		return fmt.Errorf("gh is required to create pull requests")

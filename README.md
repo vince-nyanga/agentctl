@@ -140,6 +140,13 @@ Read recent output for a tracked agent:
 ./agentctl logs <task-id> --agent manager-agent
 ```
 
+Review a task repo diff:
+
+```sh
+./agentctl diff <task-id> --repo backend
+./agentctl diff <task-id> --repo backend --stat
+```
+
 Create a PR for a task repo:
 
 ```sh
