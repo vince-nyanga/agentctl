@@ -75,6 +75,12 @@ Show configuration:
 ./agentctl config show
 ```
 
+Check local dependencies and harness availability:
+
+```sh
+./agentctl doctor
+```
+
 Configure harness roles:
 
 ```sh
