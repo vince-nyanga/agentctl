@@ -88,7 +88,19 @@ Create a planning-first multi-repo task:
 Dispatch repo workers after the manager has produced/refined briefs:
 
 ```sh
+./agentctl approve-plan <task-id>
+```
+
+Then dispatch repo workers:
+
+```sh
 ./agentctl dispatch <task-id>
+```
+
+Bypass the approval gate only when you explicitly want to run before approval:
+
+```sh
+./agentctl dispatch <task-id> --force
 ```
 
 Open the dashboard:

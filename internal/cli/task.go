@@ -77,7 +77,8 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 }
 
 func newDispatchCommand(ctx *appContext) *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "dispatch <task-id>",
 		Short: "Start worker agents for a planned task",
 		Args:  cobra.ExactArgs(1),
@@ -89,6 +90,9 @@ func newDispatchCommand(ctx *appContext) *cobra.Command {
 			task, ok := state.Tasks[args[0]]
 			if !ok {
 				return fmt.Errorf("unknown task %q", args[0])
+			}
+			if task.State != "plan_approved" && !force {
+				return fmt.Errorf("task %s is %q; approve the plan first with `agentctl approve-plan %s` or rerun dispatch with --force", task.ID, task.State, task.ID)
 			}
 			for _, repo := range task.Repos {
 				briefPath := filepath.Join(task.Workspace, "briefs", repo.Name+".md")
@@ -109,6 +113,40 @@ func newDispatchCommand(ctx *appContext) *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "dispatched %d workers for %s\n", len(task.Repos), task.ID)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "dispatch even when the task plan has not been approved")
+	return cmd
+}
+
+func newApprovePlanCommand(ctx *appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:   "approve-plan <task-id>",
+		Short: "Approve a task plan so workers can be dispatched",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			state, err := ctx.store.Load()
+			if err != nil {
+				return err
+			}
+			task, ok := state.Tasks[args[0]]
+			if !ok {
+				return fmt.Errorf("unknown task %q", args[0])
+			}
+			if task.State == "running" || task.State == "archived" {
+				return fmt.Errorf("cannot approve plan for task in state %q", task.State)
+			}
+			task.State = "plan_approved"
+			task.UpdatedAt = time.Now()
+			state.Tasks[task.ID] = task
+			if err := ctx.store.Save(state); err != nil {
+				return err
+			}
+			if err := ctx.store.AddEvent(core.Event{TaskID: task.ID, Type: "plan.approved", Message: "plan approved for worker dispatch"}); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "approved plan for %s\n", task.ID)
 			return nil
 		},
 	}
