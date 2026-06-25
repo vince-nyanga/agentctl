@@ -43,6 +43,19 @@ Install from GitHub:
 go install github.com/vince-nyanga/agentctl@latest
 ```
 
+Install a tagged version:
+
+```sh
+go install github.com/vince-nyanga/agentctl@v0.1.0
+```
+
+Tagged releases publish macOS/Linux binary archives from GitHub Actions:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 Build from a local checkout:
 
 ```sh

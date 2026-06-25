@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          commit="${GITHUB_SHA}"
+          date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ldflags="-s -w -X github.com/vince-nyanga/agentctl/internal/version.Version=${version} -X github.com/vince-nyanga/agentctl/internal/version.Commit=${commit} -X github.com/vince-nyanga/agentctl/internal/version.Date=${date}"
+          mkdir -p dist
+          for os in darwin linux; do
+            for arch in arm64 amd64; do
+              name="agentctl_${version}_${os}_${arch}"
+              GOOS="$os" GOARCH="$arch" go build -ldflags "$ldflags" -o "dist/$name/agentctl" .
+              cp README.md LICENSE "dist/$name/"
+              tar -C dist -czf "dist/$name.tar.gz" "$name"
+            done
+          done
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true
