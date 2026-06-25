@@ -191,6 +191,8 @@ Create a PR for a task repo:
 ./agentctl pr <task-id> --repo backend
 ```
 
+PR creation refuses dirty worktrees by default, pushes the task branch to `origin`, then calls `gh pr create`.
+
 Archive a completed task and clean up agent sessions/worktrees:
 
 ```sh

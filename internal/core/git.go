@@ -153,3 +153,22 @@ func CreatePullRequest(path, title, body string) error {
 	}
 	return nil
 }
+
+func PushBranch(path, remote, branch string) error {
+	if remote == "" {
+		remote = "origin"
+	}
+	if branch == "" {
+		branch = CurrentBranch(path)
+	}
+	if branch == "" {
+		return fmt.Errorf("cannot determine current branch")
+	}
+	cmd := exec.Command("git", "-C", path, "push", "-u", remote, branch)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git push failed: %s", strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
