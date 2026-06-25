@@ -38,6 +38,8 @@ func newManagerTickCommand(ctx *appContext) *cobra.Command {
 
 func newManagerApplyCommand(ctx *appContext) *cobra.Command {
 	var file string
+	var fromTmux bool
+	var lines int
 	cmd := &cobra.Command{
 		Use:   "apply <task-id>",
 		Short: "Apply a structured manager action block",
@@ -51,14 +53,31 @@ func newManagerApplyCommand(ctx *appContext) *cobra.Command {
 			if !ok {
 				return fmt.Errorf("unknown task %q", args[0])
 			}
-			if file == "" {
-				file = filepath.Join(task.Workspace, "manager-response.md")
+			var text string
+			if fromTmux {
+				manager, err := findAgentByRole(task, "manager")
+				if err != nil {
+					return err
+				}
+				if !core.TmuxSessionExists(manager.TmuxName) {
+					return fmt.Errorf("manager session %s is not running", manager.TmuxName)
+				}
+				output, err := core.TailTmux(manager.TmuxName, lines)
+				if err != nil {
+					return err
+				}
+				text = output
+			} else {
+				if file == "" {
+					file = filepath.Join(task.Workspace, "manager-response.md")
+				}
+				data, err := os.ReadFile(file)
+				if err != nil {
+					return err
+				}
+				text = string(data)
 			}
-			data, err := os.ReadFile(file)
-			if err != nil {
-				return err
-			}
-			actions, err := core.ParseManagerActions(string(data))
+			actions, err := core.ParseManagerActions(text)
 			if err != nil {
 				return err
 			}
@@ -72,6 +91,8 @@ func newManagerApplyCommand(ctx *appContext) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&file, "file", "", "manager response file; defaults to task manager-response.md")
+	cmd.Flags().BoolVar(&fromTmux, "from-tmux", false, "read action block from live manager tmux output")
+	cmd.Flags().IntVar(&lines, "lines", 300, "number of tmux lines to capture with --from-tmux")
 	return cmd
 }
 
