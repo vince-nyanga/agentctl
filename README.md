@@ -185,6 +185,12 @@ Show tasks that need attention:
 ./agentctl blocked
 ```
 
+Show pending approvals:
+
+```sh
+./agentctl approvals
+```
+
 Read recent output for a tracked agent:
 
 ```sh

@@ -38,6 +38,7 @@ func Execute() error {
 	rootCmd.AddCommand(newDispatchCommand(ctx))
 	rootCmd.AddCommand(newStatusCommand(ctx))
 	rootCmd.AddCommand(newBlockedCommand(ctx))
+	rootCmd.AddCommand(newApprovalsCommand(ctx))
 	rootCmd.AddCommand(newInspectCommand(ctx))
 	rootCmd.AddCommand(newLogsCommand(ctx))
 	rootCmd.AddCommand(newDiffCommand(ctx))
