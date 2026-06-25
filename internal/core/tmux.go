@@ -44,3 +44,13 @@ func TailTmux(target string, lines int) (string, error) {
 	out, err := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-S", fmt.Sprintf("-%d", lines)).Output()
 	return string(out), err
 }
+
+func KillTmuxSession(target string) error {
+	if target == "" {
+		return nil
+	}
+	if err := exec.Command("tmux", "has-session", "-t", target).Run(); err != nil {
+		return nil
+	}
+	return exec.Command("tmux", "kill-session", "-t", target).Run()
+}

@@ -19,6 +19,10 @@ func StatePath(root string) string {
 	return filepath.Join(root, "state.json")
 }
 
+func DBPath(root string) string {
+	return filepath.Join(root, "agentctl.db")
+}
+
 func TasksDir(root string) string {
 	return filepath.Join(root, "tasks")
 }

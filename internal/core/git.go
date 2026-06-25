@@ -75,6 +75,29 @@ func CreateWorktree(source, branch, target string) error {
 	return nil
 }
 
+func RemoveWorktree(source, target string) error {
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		return nil
+	}
+	cmd := exec.Command("git", "-C", source, "worktree", "remove", target)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git worktree remove failed: %s", strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+func PruneWorktrees(source string) error {
+	cmd := exec.Command("git", "-C", source, "worktree", "prune")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git worktree prune failed: %s", strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
 func GitStatusShort(path string) string {
 	out, err := exec.Command("git", "-C", path, "status", "--short").Output()
 	if err != nil {

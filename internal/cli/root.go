@@ -34,6 +34,7 @@ func Execute() error {
 	rootCmd.AddCommand(newDashboardCommand(ctx))
 	rootCmd.AddCommand(newOpenCommand(ctx))
 	rootCmd.AddCommand(newPRCommand(ctx))
+	rootCmd.AddCommand(newArchiveCommand(ctx))
 
 	return rootCmd.Execute()
 }

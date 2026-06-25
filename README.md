@@ -10,6 +10,7 @@ This first build includes:
 
 - Go CLI scaffold.
 - Configurable state root via `--root` or `AGENTCTL_ROOT`.
+- SQLite-backed state in `agentctl.db`.
 - Repo registry with `repo add`, `repo list`, and `repo scan`.
 - Multi-repo task workspaces under `~/.agentctl/tasks` by default.
 - Git worktree creation from existing local clones.
@@ -19,8 +20,9 @@ This first build includes:
 - tmux-backed manager and worker sessions.
 - Bubble Tea TUI dashboard.
 - GitHub PR creation command using `gh`.
+- Task archival cleanup for tmux sessions and git worktrees.
 
-SQLite, daemonized supervision, richer approvals, and remote monitoring are specified in `ARCHITECTURE.md` and will come after the local workflow is solid.
+Daemonized supervision, richer approvals, and remote monitoring are specified in `ARCHITECTURE.md` and will come after the local workflow is solid.
 
 ## Requirements
 
@@ -104,6 +106,19 @@ Create a PR for a task repo:
 
 ```sh
 ./agentctl pr <task-id> --repo backend
+```
+
+Archive a completed task and clean up agent sessions/worktrees:
+
+```sh
+./agentctl archive <task-id>
+```
+
+Keep worktrees or sessions if you still need to inspect them:
+
+```sh
+./agentctl archive <task-id> --keep-worktrees
+./agentctl archive <task-id> --keep-sessions
 ```
 
 ## Choosing State Location
