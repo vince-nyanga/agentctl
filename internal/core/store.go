@@ -333,8 +333,7 @@ func loadTasks(ctx context.Context, db *sql.DB) (map[string]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	tasks := map[string]Task{}
+	var taskList []Task
 	for rows.Next() {
 		var task Task
 		var createdAt, updatedAt string
@@ -343,6 +342,19 @@ func loadTasks(ctx context.Context, db *sql.DB) (map[string]Task, error) {
 		}
 		task.CreatedAt = parseTime(createdAt)
 		task.UpdatedAt = parseTime(updatedAt)
+		taskList = append(taskList, task)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	tasks := map[string]Task{}
+	for _, task := range taskList {
+		var err error
 		task.Repos, err = loadTaskRepos(ctx, db, task.ID)
 		if err != nil {
 			return nil, err
@@ -353,7 +365,7 @@ func loadTasks(ctx context.Context, db *sql.DB) (map[string]Task, error) {
 		}
 		tasks[task.ID] = task
 	}
-	return tasks, rows.Err()
+	return tasks, nil
 }
 
 func loadTaskRepos(ctx context.Context, db *sql.DB, taskID string) ([]TaskRepo, error) {
