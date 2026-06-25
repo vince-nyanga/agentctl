@@ -135,9 +135,9 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m dashboardModel) View() string {
 	if m.width == 0 {
-		m.width = 100
+		m.width = 118
 	}
-	header := titleStyle.Width(m.width).Render("Agent Mission Control")
+	header := m.renderHeader(m.width)
 	tabs := m.renderTabs(m.width)
 	footerText := "h/l tabs | j/k tasks | r refresh | a approve | d dispatch | x archive | q quit"
 	if m.pending != "" {
@@ -148,11 +148,36 @@ func (m dashboardModel) View() string {
 	}
 	footer := footerStyle.Width(m.width).Render(footerText)
 	if len(m.tasks) == 0 {
-		return lipgloss.JoinVertical(lipgloss.Left, header, tabs, emptyStyle.Render("No tasks yet. Start with: agentctl plan \"Your goal\" --repo <name>"), footer)
+		return lipgloss.JoinVertical(lipgloss.Left, header, tabs, m.renderEmpty(m.width), footer)
 	}
 
 	body := m.renderActiveTab(m.width)
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer)
+}
+
+func (m dashboardModel) renderHeader(width int) string {
+	total, running, planning, done, archived := m.countTasks()
+	brand := titleStyle.Render(" agentctl ")
+	subtitle := mutedStyle.Render(" Mission Control ")
+	stats := headerStatStyle.Render(fmt.Sprintf("tasks %d | running %d | planning %d | done %d | archived %d | approvals %d | attention %d", total, running, planning, done, archived, len(m.approvals), len(m.attentionTasks())))
+	return headerStyle.Width(width).Render(lipgloss.JoinHorizontal(lipgloss.Center, brand, subtitle, stats))
+}
+
+func (m dashboardModel) renderEmpty(width int) string {
+	body := strings.Join([]string{
+		sectionStyle.Render("No active tasks yet"),
+		"",
+		"Register repos:",
+		commandStyle.Render("agentctl repo scan ~/Src --register"),
+		"",
+		"Ask the manager across all registered repos:",
+		commandStyle.Render("agentctl ask \"Tell me what this codebase is all about\""),
+		commandStyle.Render("agentctl ask \"Implement auth across backend and frontend\""),
+		"",
+		"Open this dashboard anytime:",
+		commandStyle.Render("agentctl"),
+	}, "\n")
+	return heroStyle.Width(width - 4).Render(body)
 }
 
 func (m dashboardModel) stageAction(action string) (tea.Model, tea.Cmd) {
@@ -376,20 +401,9 @@ func (m dashboardModel) renderActiveTab(width int) string {
 }
 
 func (m dashboardModel) renderOverview(width int) string {
-	total, running, planning, done, archived := 0, 0, 0, 0, 0
+	total, running, planning, _, _ := m.countTasks()
 	agents, stopped := 0, 0
 	for _, task := range m.tasks {
-		total++
-		switch task.State {
-		case "running":
-			running++
-		case "planning":
-			planning++
-		case "done":
-			done++
-		case "archived":
-			archived++
-		}
 		for _, agent := range task.Agents {
 			agents++
 			if agent.State != "running" {
@@ -397,18 +411,48 @@ func (m dashboardModel) renderOverview(width int) string {
 			}
 		}
 	}
-	metrics := []string{
-		fmt.Sprintf("Tasks:          %d", total),
-		fmt.Sprintf("Running:        %d", running),
-		fmt.Sprintf("Planning:       %d", planning),
-		fmt.Sprintf("Done:           %d", done),
-		fmt.Sprintf("Archived:       %d", archived),
-		fmt.Sprintf("Agents:         %d", agents),
-		fmt.Sprintf("Needs attention:%d", len(m.attentionTasks())),
-		fmt.Sprintf("Approvals:      %d", len(m.approvals)),
-		fmt.Sprintf("Stopped agents: %d", stopped),
+	cards := []string{
+		metricCard("Tasks", total, "tracked work"),
+		metricCard("Running", running, "in progress"),
+		metricCard("Planning", planning, "manager/approval"),
+		metricCard("Approvals", len(m.approvals), "need decision"),
+		metricCard("Attention", len(m.attentionTasks()), "blocked/stopped"),
+		metricCard("Agents", agents, fmt.Sprintf("%d stopped", stopped)),
 	}
-	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Overview") + "\n\n" + strings.Join(metrics, "\n"))
+	return panelStyle.Width(width - 4).Render(sectionStyle.Render("Overview") + "\n\n" + cardRows(cards, 3))
+}
+
+func (m dashboardModel) countTasks() (total, running, planning, done, archived int) {
+	for _, task := range m.tasks {
+		total++
+		switch task.State {
+		case "running":
+			running++
+		case "planning", "manager_review", "plan_approved":
+			planning++
+		case "done":
+			done++
+		case "archived":
+			archived++
+		}
+	}
+	return total, running, planning, done, archived
+}
+
+func metricCard(label string, value int, hint string) string {
+	return metricStyle.Render(fmt.Sprintf("%s\n%s\n%s", mutedStyle.Render(label), numberStyle.Render(fmt.Sprintf("%d", value)), mutedStyle.Render(hint)))
+}
+
+func cardRows(cards []string, perRow int) string {
+	var rows []string
+	for i := 0; i < len(cards); i += perRow {
+		end := i + perRow
+		if end > len(cards) {
+			end = len(cards)
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...))
+	}
+	return strings.Join(rows, "\n")
 }
 
 func (m dashboardModel) renderTaskBoard(width int) string {
@@ -436,7 +480,7 @@ func (m dashboardModel) renderTaskList(width int) string {
 		if reason == "" {
 			reason = "ok"
 		}
-		line := fmt.Sprintf("%s\n%s | %d repos | %d agents\n%s", task.ID, task.State, len(task.Repos), len(task.Agents), reason)
+		line := fmt.Sprintf("%s\n%s  %d repos  %d agents\n%s", strongStyle.Render(task.ID), stateBadge(task.State), len(task.Repos), len(task.Agents), mutedStyle.Render(reason))
 		rows = append(rows, style.Width(width).Render(line))
 	}
 	return panelStyle.Width(width).Render(strings.Join(rows, "\n"))
@@ -448,13 +492,13 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 	b.WriteString(sectionStyle.Render(task.ID))
 	b.WriteString("\n")
 	b.WriteString(labelStyle.Render("Goal: "))
-	b.WriteString(task.Goal)
+	b.WriteString(wrapText(task.Goal, width-14))
 	b.WriteString("\n")
 	b.WriteString(labelStyle.Render("State: "))
-	b.WriteString(task.State)
+	b.WriteString(stateBadge(task.State))
 	b.WriteString("\n")
 	b.WriteString(labelStyle.Render("Workspace: "))
-	b.WriteString(task.Workspace)
+	b.WriteString(mutedStyle.Render(task.Workspace))
 	b.WriteString("\n\n")
 	b.WriteString(sectionStyle.Render("Repos"))
 	b.WriteString("\n")
@@ -463,7 +507,7 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 		if !repo.Owned {
 			owned = "attached"
 		}
-		b.WriteString(fmt.Sprintf("- %s  %s\n  branch: %s | %s\n", repo.Name, repo.WorktreePath, repo.Branch, owned))
+		b.WriteString(fmt.Sprintf("- %s  %s\n  branch: %s | %s\n", strongStyle.Render(repo.Name), mutedStyle.Render(repo.WorktreePath), repo.Branch, owned))
 	}
 	b.WriteString("\n")
 	b.WriteString(sectionStyle.Render("Agents"))
@@ -472,7 +516,7 @@ func (m dashboardModel) renderTaskDetail(width int) string {
 		b.WriteString("No agents started yet.\n")
 	} else {
 		for _, agent := range task.Agents {
-			b.WriteString(fmt.Sprintf("- %s [%s/%s] %s\n  tmux: %s\n", agent.Name, agent.Role, agent.Harness, agent.State, agent.TmuxName))
+			b.WriteString(fmt.Sprintf("- %s [%s/%s] %s\n  tmux: %s\n", strongStyle.Render(agent.Name), agent.Role, agent.Harness, stateBadge(agent.State), mutedStyle.Render(agent.TmuxName)))
 		}
 	}
 	b.WriteString("\n")
@@ -543,15 +587,50 @@ func (m dashboardModel) attentionTasks() []core.Task {
 	return tasks
 }
 
+func stateBadge(state string) string {
+	style := badgeStyle
+	switch state {
+	case "running":
+		style = badgeGreenStyle
+	case "planning", "manager_review", "plan_approved", "waiting_for_approval":
+		style = badgeYellowStyle
+	case "done", "archived", "idle":
+		style = badgeBlueStyle
+	case "stopped", "blocked", "failed":
+		style = badgeRedStyle
+	}
+	return style.Render(state)
+}
+
+func wrapText(text string, width int) string {
+	if width < 20 {
+		return text
+	}
+	return lipgloss.NewStyle().Width(width).Render(text)
+}
+
 var (
 	titleStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("62")).Padding(0, 1)
+	headerStyle       = lipgloss.NewStyle().Padding(0, 1).Background(lipgloss.Color("236"))
+	headerStatStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 	footerStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Padding(1, 0, 0, 0)
 	tabsStyle         = lipgloss.NewStyle().Padding(1, 0, 0, 0)
 	activeTabStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("62")).Padding(0, 1)
 	inactiveTabStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Padding(0, 1)
 	panelStyle        = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Padding(1, 2).MarginRight(1)
+	heroStyle         = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Padding(2, 3)
 	sectionStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("81"))
 	labelStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229"))
+	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	strongStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	commandStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
+	numberStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229"))
+	metricStyle       = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240")).Padding(1, 2).MarginRight(1).MarginBottom(1).Width(22)
+	badgeStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("240")).Padding(0, 1)
+	badgeGreenStyle   = badgeStyle.Copy().Foreground(lipgloss.Color("16")).Background(lipgloss.Color("42"))
+	badgeYellowStyle  = badgeStyle.Copy().Foreground(lipgloss.Color("16")).Background(lipgloss.Color("220"))
+	badgeBlueStyle    = badgeStyle.Copy().Foreground(lipgloss.Color("16")).Background(lipgloss.Color("81"))
+	badgeRedStyle     = badgeStyle.Copy().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("160"))
 	taskStyle         = lipgloss.NewStyle().Padding(0, 1).MarginTop(1).Foreground(lipgloss.Color("252"))
 	selectedTaskStyle = taskStyle.Copy().Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(lipgloss.Color("229")).Foreground(lipgloss.Color("229"))
 	emptyStyle        = lipgloss.NewStyle().Padding(2).Foreground(lipgloss.Color("244"))

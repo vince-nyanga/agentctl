@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,8 +24,9 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if len(repoNames) == 0 {
-				return fmt.Errorf("at least one --repo is required")
+			selectedRepos, err := resolvePlanRepos(state, repoNames)
+			if err != nil {
+				return err
 			}
 
 			now := time.Now()
@@ -32,7 +34,7 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 			workspace := filepath.Join(core.TasksDir(ctx.store.Root()), taskID)
 			task := core.Task{ID: taskID, Goal: args[0], State: "planning", Workspace: workspace, CreatedAt: now, UpdatedAt: now}
 
-			for _, repoName := range repoNames {
+			for _, repoName := range selectedRepos {
 				repo, ok := state.Repos[repoName]
 				if !ok {
 					return fmt.Errorf("unknown repo %q", repoName)
@@ -79,6 +81,21 @@ func newPlanCommand(ctx *appContext) *cobra.Command {
 	return cmd
 }
 
+func resolvePlanRepos(state core.State, requested []string) ([]string, error) {
+	if len(requested) > 0 {
+		return requested, nil
+	}
+	if len(state.Repos) == 0 {
+		return nil, fmt.Errorf("no repos registered; run `agentctl repo add <name> <path>` or `agentctl repo scan <dir> --register`")
+	}
+	repos := make([]string, 0, len(state.Repos))
+	for name := range state.Repos {
+		repos = append(repos, name)
+	}
+	sort.Strings(repos)
+	return repos, nil
+}
+
 func newDispatchCommand(ctx *appContext) *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
@@ -98,7 +115,10 @@ func newDispatchCommand(ctx *appContext) *cobra.Command {
 				return fmt.Errorf("task %s is %q; approve the plan first with `agentctl approve-plan %s` or rerun dispatch with --force", task.ID, task.State, task.ID)
 			}
 			for _, repo := range task.Repos {
-				briefPath := filepath.Join(task.Workspace, "briefs", repo.Name+".md")
+				briefPath, err := prepareWorkerDispatchPrompt(task, repo)
+				if err != nil {
+					return err
+				}
 				agentName := repo.Name + "-agent"
 				agent, err := startAgent(state, task, "worker", agentName, repo.Name, repo.WorktreePath, briefPath)
 				if err != nil {

@@ -100,6 +100,13 @@ Register existing repos:
 ./agentctl repo add frontend ~/Src/company/frontend
 ```
 
+Ask the manager what to do. When `--repo` is omitted, all registered repos are included:
+
+```sh
+./agentctl ask "Tell me what this codebase is all about"
+./agentctl ask "Implement auth across backend and frontend"
+```
+
 Or scan a directory:
 
 ```sh
@@ -148,13 +155,18 @@ Configure harness roles:
 ./agentctl config set-role reviewer opencode
 ```
 
-Create a planning-first multi-repo task:
+Create an explicit planning-first multi-repo task:
 
 ```sh
+./agentctl plan "Add refresh-token auth flow"
+
+# Or restrict to specific registered repos:
 ./agentctl plan "Add refresh-token auth flow" \
   --repo backend \
   --repo frontend
 ```
+
+When `--repo` is omitted, `agentctl` gives the manager access to all registered repos.
 
 Create a task from worktrees you already created manually:
 

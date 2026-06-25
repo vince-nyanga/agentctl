@@ -90,6 +90,54 @@ Do not implement the feature yet. Plan first.
 	return nil
 }
 
+func WriteAskArtifacts(task Task) error {
+	plan := fmt.Sprintf("# Manager Request: %s\n\nTask ID: `%s`\n\n## User Message\n\n%s\n\n## Repositories Available To Manager\n\n%s\n\n## Manager Output\n\nThe manager should classify this request and decide whether to answer, investigate, plan, request approval, or prepare implementation briefs.\n", task.Goal, task.ID, task.Goal, taskRepoList(task))
+	managerPrompt := fmt.Sprintf(`You are the manager agent for Agent Mission Control task %s.
+
+User message:
+%s
+
+Available repos:
+%s
+
+Workspace:
+%s
+
+Your job:
+1. Classify the user's request as one of: answer, investigate, plan, implement, review, status.
+2. Inspect the relevant repos before making claims about code.
+3. If the user is asking a question or asking for repo understanding, write your answer to manager-response.md and manager-log.md. Do not spawn workers.
+4. If implementation is needed, create or refine plan.md, decisions.md, risk-review.md, architecture-notes.md, and repo briefs under briefs/.
+5. For implementation work, stop after producing the plan/briefs and report that approval is needed before dispatch.
+6. If the request is ambiguous, create an approval/request explaining the decision needed.
+7. Do not implement code directly unless explicitly instructed and policy allows it.
+
+When useful, include AGENTCTL_ACTIONS in your response using the documented structured format.
+`, task.ID, task.Goal, taskRepoList(task), task.Workspace)
+
+	files := map[string]string{
+		"plan.md":               plan,
+		"manager-prompt.md":     managerPrompt,
+		"manager-response.md":   "# Manager Response\n\n",
+		"decisions.md":          "# Decisions\n\n",
+		"manager-log.md":        "# Manager Log\n\n",
+		"risk-review.md":        "# Risk Review\n\n",
+		"architecture-notes.md": "# Architecture Notes\n\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(task.Workspace, name), []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+	for _, repo := range task.Repos {
+		brief := fmt.Sprintf("# Brief: %s\n\nTask: `%s`\n\nUser message:\n%s\n\nRepo worktree:\n%s\n\nStatus:\nManager should decide whether this repo is relevant before dispatch.\n", repo.Name, task.ID, task.Goal, repo.WorktreePath)
+		if err := os.WriteFile(filepath.Join(task.Workspace, "briefs", repo.Name+".md"), []byte(brief), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func taskRepoList(task Task) string {
 	var b strings.Builder
 	for _, repo := range task.Repos {

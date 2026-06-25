@@ -23,3 +23,40 @@ func TestBuildHarnessCommandSendsPromptForInteractiveHarness(t *testing.T) {
 		t.Fatalf("command=%q prompt=%q", command, prompt)
 	}
 }
+
+func TestResolvePlanReposDefaultsToAllRegisteredRepos(t *testing.T) {
+	state := core.DefaultState(t.TempDir())
+	state.Repos["frontend"] = core.Repo{Name: "frontend"}
+	state.Repos["backend"] = core.Repo{Name: "backend"}
+	repos, err := resolvePlanRepos(state, nil)
+	if err != nil {
+		t.Fatalf("resolvePlanRepos() error = %v", err)
+	}
+	want := []string{"backend", "frontend"}
+	if len(repos) != len(want) {
+		t.Fatalf("repos = %#v", repos)
+	}
+	for i := range want {
+		if repos[i] != want[i] {
+			t.Fatalf("repos = %#v, want %#v", repos, want)
+		}
+	}
+}
+
+func TestResolvePlanReposUsesExplicitRepos(t *testing.T) {
+	state := core.DefaultState(t.TempDir())
+	repos, err := resolvePlanRepos(state, []string{"api"})
+	if err != nil {
+		t.Fatalf("resolvePlanRepos() error = %v", err)
+	}
+	if len(repos) != 1 || repos[0] != "api" {
+		t.Fatalf("repos = %#v", repos)
+	}
+}
+
+func TestResolvePlanReposErrorsWithoutRegisteredRepos(t *testing.T) {
+	state := core.DefaultState(t.TempDir())
+	if _, err := resolvePlanRepos(state, nil); err == nil {
+		t.Fatalf("expected error without registered repos")
+	}
+}

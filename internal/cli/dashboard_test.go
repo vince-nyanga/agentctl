@@ -42,7 +42,7 @@ func TestDashboardRendersOverviewAndTabs(t *testing.T) {
 	model.width = 120
 
 	view := model.View()
-	for _, want := range []string{"Overview", "Tasks", "Approvals", "Needs attention"} {
+	for _, want := range []string{"Overview", "Tasks", "Approvals", "Attention"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("dashboard overview missing %q:\n%s", want, view)
 		}

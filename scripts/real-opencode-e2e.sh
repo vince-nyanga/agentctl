@@ -16,6 +16,17 @@ if ! command -v opencode >/dev/null 2>&1; then
 fi
 
 TMP="$(mktemp -d)"
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  if [[ "$haystack" != *"$needle"* ]]; then
+    echo "expected output to contain: $needle" >&2
+    echo "actual output:" >&2
+    printf '%s\n' "$haystack" >&2
+    exit 1
+  fi
+}
+
 cleanup() {
   set +e
   if [[ -n "${TASK_ID:-}" && -n "${STATE:-}" ]]; then
@@ -72,7 +83,16 @@ for _ in 1 2 3 4 5 6; do
   fi
 done
 
-"$BIN" --root "$STATE" review-plan "$TASK_ID" --briefs | grep -qi "ready for approval"
+PLAN_REVIEW="$("$BIN" --root "$STATE" review-plan "$TASK_ID" --briefs)"
+PLAN_REVIEW_LOWER="$(printf '%s' "$PLAN_REVIEW" | tr '[:upper:]' '[:lower:]')"
+case "$PLAN_REVIEW_LOWER" in
+  *"ready for approval"*|*"ready for implementation after plan approval"*) ;;
+  *)
+    echo "expected plan review to contain an approval-ready status" >&2
+    printf '%s\n' "$PLAN_REVIEW" >&2
+    exit 1
+    ;;
+esac
 "$BIN" --root "$STATE" approve-plan "$TASK_ID" >/dev/null
 "$BIN" --root "$STATE" dispatch "$TASK_ID" >/dev/null
 
@@ -86,13 +106,18 @@ done
 
 WORKTREE="$STATE/tasks/$TASK_ID/worktrees/app"
 test -f "$WORKTREE/main.go"
-git -C "$WORKTREE" diff -- main.go | grep -q 'flag.String("name"'
+assert_contains "$(git -C "$WORKTREE" diff -- main.go)" 'flag.String("name"'
 (
   cd "$WORKTREE"
   go test ./...
   [[ "$(go run .)" == "hello" ]]
   [[ "$(go run . --name Alice)" == "hello, Alice" ]]
 )
-"$BIN" --root "$STATE" logs "$TASK_ID" --agent app-agent --lines 200 | grep -q "Verification passed\|go test ./\|hello, Alice"
+LOGS="$("$BIN" --root "$STATE" logs "$TASK_ID" --agent app-agent --lines 200)"
+if [[ "$LOGS" != *"Verification passed"* && "$LOGS" != *"go test ./"* && "$LOGS" != *"hello, Alice"* ]]; then
+  echo "expected worker logs to contain verification evidence" >&2
+  printf '%s\n' "$LOGS" >&2
+  exit 1
+fi
 
 echo "real opencode e2e passed: $TASK_ID"

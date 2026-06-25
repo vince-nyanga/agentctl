@@ -44,7 +44,7 @@ git -C "$REPO" commit -m "Initial commit" >/dev/null
 "$BIN" --root "$STATE_ROOT" repo add smoke "$REPO" >/dev/null
 
 PLAN_OUTPUT="$TMP/plan.out"
-"$BIN" --root "$STATE_ROOT" plan "Smoke test task lifecycle" --repo smoke --start-manager=false >"$PLAN_OUTPUT"
+"$BIN" --root "$STATE_ROOT" plan "Smoke test task lifecycle" --start-manager=false >"$PLAN_OUTPUT"
 TASK_ID="$(awk '/created task/ {print $3}' "$PLAN_OUTPUT")"
 if [[ -z "$TASK_ID" ]]; then
   echo "failed to parse task id" >&2
