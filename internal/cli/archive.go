@@ -11,6 +11,7 @@ import (
 func newArchiveCommand(ctx *appContext) *cobra.Command {
 	var keepWorktrees bool
 	var keepSessions bool
+	var force bool
 	cmd := &cobra.Command{
 		Use:   "archive <task-id>",
 		Short: "Archive a task and clean up its sessions and worktrees",
@@ -37,6 +38,10 @@ func newArchiveCommand(ctx *appContext) *cobra.Command {
 			if !keepWorktrees {
 				seenSources := map[string]bool{}
 				for _, repo := range task.Repos {
+					status := core.GitStatusShort(repo.WorktreePath)
+					if core.IsDirtyStatus(status) && !force {
+						return fmt.Errorf("worktree %s has uncommitted changes; inspect it or rerun with --force", repo.WorktreePath)
+					}
 					if err := core.RemoveWorktree(repo.SourcePath, repo.WorktreePath); err != nil {
 						return fmt.Errorf("remove worktree %s: %w", repo.Name, err)
 					}
@@ -68,5 +73,6 @@ func newArchiveCommand(ctx *appContext) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&keepWorktrees, "keep-worktrees", false, "do not remove task worktrees")
 	cmd.Flags().BoolVar(&keepSessions, "keep-sessions", false, "do not stop tmux sessions")
+	cmd.Flags().BoolVar(&force, "force", false, "remove dirty task worktrees")
 	return cmd
 }

@@ -110,6 +110,11 @@ func GitStatusShort(path string) string {
 	return status
 }
 
+func IsDirtyStatus(status string) bool {
+	status = strings.TrimSpace(status)
+	return status != "" && status != "clean" && status != "unknown"
+}
+
 func CurrentBranch(path string) string {
 	out, err := exec.Command("git", "-C", path, "branch", "--show-current").Output()
 	if err != nil {

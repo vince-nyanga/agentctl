@@ -128,6 +128,12 @@ Archive a completed task and clean up agent sessions/worktrees:
 ./agentctl archive <task-id>
 ```
 
+Archive refuses to remove dirty worktrees by default. Use `--force` only when you intentionally want to discard uncommitted task worktree changes:
+
+```sh
+./agentctl archive <task-id> --force
+```
+
 Keep worktrees or sessions if you still need to inspect them:
 
 ```sh
